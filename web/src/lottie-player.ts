@@ -33,8 +33,6 @@ const _parseSrc = async (src: string | object): Promise<Uint8Array> => {
   return encoder.encode(data as string);
 }
 
-
-
 const _fromURL = async (url: string): Promise<Record<string, any>> => {
   if (typeof url !== "string") {
     throw new Error(`The url value must be a string`);
@@ -58,6 +56,10 @@ const _fromURL = async (url: string): Promise<Record<string, any>> => {
 
   return json;
 }
+
+const _wait = (timeToDelay: number) => {
+  return new Promise((resolve) => setTimeout(resolve, timeToDelay))
+};
 
 @customElement('lottie-player')
 export class LottiePlayer extends LottiePlayerModel {
@@ -117,12 +119,12 @@ export class LottiePlayer extends LottiePlayerModel {
     return super.createRenderRoot();
   }
 
-  private _animLoop() {
+  private async _animLoop(){
     if (!this.TVG) {
       return;
     }
 
-    if (this._update()) {
+    if (await this._update()) {
       this._render();
       window.requestAnimationFrame(this._animLoop.bind(this));
     }
@@ -165,7 +167,7 @@ export class LottiePlayer extends LottiePlayerModel {
     this._flush();
   }
 
-  private _update(): boolean {
+  private async _update(): Promise<boolean> {
     if (this.currentState !== PlayerState.Playing) {
       return false;
     }
@@ -185,13 +187,14 @@ export class LottiePlayer extends LottiePlayerModel {
       if (this.loop || (totalCount && this._counter < totalCount)) {
         if (this.mode === PlayMode.Bounce) {
           this.direction = this.direction === 1 ? -1 : 1;
-          this.currentFrame = this.direction === 1 ? 0 : this.totalFrame - 1;
+          this.currentFrame = this.direction === 1 ? 0 : this.totalFrame;
         }
 
         if (this.count) {
           this._counter += 1;
         }
 
+        await _wait(this.intermission);
         this.play();
         return true;
       }
@@ -255,9 +258,9 @@ export class LottiePlayer extends LottiePlayerModel {
     this.dispatchEvent(new CustomEvent(PlayerEvent.Stop));
   }
 
-  public seek(frame: number): void {
+  public async seek(frame: number): Promise<void> {
     this._frame(frame);
-    this._update();
+    await this._update();
     this._render();
   }
 
