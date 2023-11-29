@@ -3,7 +3,7 @@ import { customElement } from 'lit/decorators.js';
 
 // @ts-ignore: WASM Glue code doesn't have type & Only available on build progress
 import Module from '../dist/thorvg-wasm';
-import { ExportableType, LibraryVersion, LottiePlayerModel, PlayerEvent, PlayerState } from './lottie-player.model';
+import { ExportableType, LibraryVersion, LottiePlayerModel, PlayerEvent, PlayerState, PlayMode } from './lottie-player.model';
 import { THORVG_VERSION } from './version';
 
 let _tvg: any;
@@ -65,6 +65,7 @@ export class LottiePlayer extends LottiePlayerModel {
   private canvas?: HTMLCanvasElement;
   private imageData?: ImageData;
   private beginTime: number = Date.now();
+  private _counter: number = 1;
 
   private _timer: any;
 
@@ -179,7 +180,13 @@ export class LottiePlayer extends LottiePlayerModel {
     if (this.currentFrame >= this.totalFrame) {
       this.dispatchEvent(new CustomEvent(PlayerEvent.Complete));
 
-      if (this.loop) {
+      if (this.loop || (this.count && this._counter < this.count)) {
+        if (this.mode === PlayMode.Bounce) {
+          this._addCount(0.5);
+        } else {
+          this._addCount(1);
+        }
+        
         this.play();
         return true;
       } else {
@@ -199,6 +206,14 @@ export class LottiePlayer extends LottiePlayerModel {
     this.pause();
     this.currentFrame = curFrame;
     this.TVG.frame(curFrame);
+  }
+
+  private _addCount(value: number): void {
+    if (!this.count) {
+      return;
+    }
+
+    this._counter += value;
   }
 
   public async load(src: string | object): Promise<void> {
@@ -236,6 +251,7 @@ export class LottiePlayer extends LottiePlayerModel {
   public stop(): void {
     this.currentState = PlayerState.Stopped;
     this.currentFrame = 0;
+    this._counter = 1;
     this.TVG.frame(0);
 
     this.dispatchEvent(new CustomEvent(PlayerEvent.Stop));
