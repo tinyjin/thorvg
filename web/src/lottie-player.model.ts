@@ -166,9 +166,9 @@ export abstract class LottiePlayerModel extends LitElement {
    *
    * The default color is full-transparency.
    *
-   * @param value Background color(ff00ff00)
+   * @param value Hex(#fff) or string(red) of background color
    */
-  public abstract setBgColor (value: number): void;
+  public abstract setBgColor (value: string): void;
 
   /**
    * Save current animation to other file type

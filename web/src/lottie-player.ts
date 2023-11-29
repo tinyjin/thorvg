@@ -280,8 +280,12 @@ export class LottiePlayer extends LottiePlayerModel {
     this.speed = value;
   }
 
-  public setBgColor(value: number): void {
-    throw new Error('Method not implemented.');
+  public setBgColor(value: string): void {
+    if (!this.TVG) {
+      return;
+    }
+
+    this.canvas!.style.backgroundColor = value;
   }
 
   public save(target: ExportableType): void {
