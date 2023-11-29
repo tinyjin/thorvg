@@ -177,21 +177,27 @@ export class LottiePlayer extends LottiePlayerModel {
       this.currentFrame = this.totalFrame - this.currentFrame;
     }
 
-    if (this.currentFrame >= this.totalFrame) {
-      this.dispatchEvent(new CustomEvent(PlayerEvent.Complete));
-
-      if (this.loop || (this.count && this._counter < this.count)) {
+    if (
+      (this.direction === 1 && this.currentFrame >= this.totalFrame) ||
+      (this.direction === -1 && this.currentFrame <= 0)
+    ) {
+      const totalCount = this.count ? this.mode === PlayMode.Bounce ? this.count * 2 : this.count : 0;
+      if (this.loop || (totalCount && this._counter < totalCount)) {
         if (this.mode === PlayMode.Bounce) {
-          this._addCount(0.5);
-        } else {
-          this._addCount(1);
+          this.direction = this.direction === 1 ? -1 : 1;
+          this.currentFrame = this.direction === 1 ? 0 : this.totalFrame - 1;
         }
-        
+
+        if (this.count) {
+          this._counter += 1;
+        }
+
         this.play();
         return true;
-      } else {
-        this.currentState = PlayerState.Stopped;
       }
+
+      this.dispatchEvent(new CustomEvent(PlayerEvent.Complete));
+      this.currentState = PlayerState.Stopped;
     }
 
     this.dispatchEvent(new CustomEvent(PlayerEvent.Frame, {
@@ -206,14 +212,6 @@ export class LottiePlayer extends LottiePlayerModel {
     this.pause();
     this.currentFrame = curFrame;
     this.TVG.frame(curFrame);
-  }
-
-  private _addCount(value: number): void {
-    if (!this.count) {
-      return;
-    }
-
-    this._counter += value;
   }
 
   public async load(src: string | object): Promise<void> {
