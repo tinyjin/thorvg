@@ -134,8 +134,9 @@ export class LottiePlayer extends LottiePlayerModel {
     this._render();
     this.dispatchEvent(new CustomEvent(PlayerEvent.Load));
     
-    // TODO: check autoplay
-    this.play();
+    if (this.autoPlay) {
+      this.play();
+    }
   }
 
   private _flush(): void {
@@ -168,7 +169,10 @@ export class LottiePlayer extends LottiePlayerModel {
 
     const duration = this.TVG.duration();
     const currentTime = Date.now() / 1000;
-    this.currentFrame = (currentTime - this.beginTime) / duration * this.totalFrame;
+    this.currentFrame = (currentTime - this.beginTime) / duration * this.totalFrame * this.speed;
+    if (this.direction === -1) {
+      this.currentFrame = this.totalFrame - this.currentFrame;
+    }
 
     if (this.currentFrame >= this.totalFrame) {
       this.dispatchEvent(new CustomEvent(PlayerEvent.Complete));
@@ -253,20 +257,37 @@ export class LottiePlayer extends LottiePlayerModel {
   }
 
   public setLooping(value: boolean): void {
-    throw new Error('Method not implemented.');
+    if (!this.TVG) {
+      return;
+    }
+
+    this.loop = value;
   }
+
   public setDirection(value: number): void {
-    throw new Error('Method not implemented.');
+    if (!this.TVG) {
+      return;
+    }
+
+    this.direction = value;
   }
+
   public setSpeed(value: number): void {
-    throw new Error('Method not implemented.');
+    if (!this.TVG) {
+      return;
+    }
+
+    this.speed = value;
   }
+
   public setBgColor(value: number): void {
     throw new Error('Method not implemented.');
   }
+
   public save(target: ExportableType): void {
     throw new Error('Method not implemented.');
   }
+
   public getVersions(): LibraryVersion {
     throw new Error('Method not implemented.');
   }
