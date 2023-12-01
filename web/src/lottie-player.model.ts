@@ -94,28 +94,27 @@ export abstract class LottiePlayerModel extends LitElement {
   public intermission: number = 1;
 
   /**
-   * total frame of current animation (readonly)
+   * total frame of current animation
    */
   @property({ type: Number })
-  public readonly totalFrame?: number;
+  public totalFrame: number = 0;
 
   /**
-   * current frame of current animation (readonly)
+   * current frame of current animation
    */
   @property({ type: Number })
-  public readonly currentFrame?: number;
+  public currentFrame: number = 0;
 
-  // @ts-expect-error: C++ object from WASM (Singleton)
-  private static _tvg?: any;
-
-  // private _prevState?: any;
-
-  // private _counter: number = 1;
+  /**
+   * Player state.
+   */
+  @property({ type: Number })
+  public currentState: PlayerState = PlayerState.Loading;
 
   /**
    * Configure and load
    */
-  public abstract load (src: string | object): void;
+  public abstract load (src: string | object): Promise<void>;
 
   /**
    * Start playing animation.
