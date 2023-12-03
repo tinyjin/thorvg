@@ -3,7 +3,7 @@ import { customElement } from 'lit/decorators.js';
 
 // @ts-ignore: WASM Glue code doesn't have type & Only available on build progress
 import Module from '../dist/thorvg-wasm';
-import { ExportableType, LibraryVersion, LottiePlayerModel, PlayerState } from './lottie-player.model';
+import { ExportableType, LibraryVersion, LottiePlayerModel, PlayerEvent, PlayerState } from './lottie-player.model';
 
 let _tvg: any;
 (async () => {  
@@ -132,6 +132,9 @@ export class LottiePlayer extends LottiePlayerModel {
     }
 
     this._render();
+    this.dispatchEvent(new CustomEvent(PlayerEvent.Load));
+    
+    // TODO: check autoplay
     this.play();
   }
 
@@ -168,6 +171,8 @@ export class LottiePlayer extends LottiePlayerModel {
     this.currentFrame = (currentTime - this.beginTime) / duration * this.totalFrame;
 
     if (this.currentFrame >= this.totalFrame) {
+      this.dispatchEvent(new CustomEvent(PlayerEvent.Complete));
+
       if (this.loop) {
         this.play();
         return true;
@@ -176,6 +181,11 @@ export class LottiePlayer extends LottiePlayerModel {
       }
     }
 
+    this.dispatchEvent(new CustomEvent(PlayerEvent.Frame, {
+      detail: {
+        frame: this.currentFrame,
+      },
+    }));
     return this.TVG.frame(this.currentFrame);
   }
 
@@ -186,8 +196,15 @@ export class LottiePlayer extends LottiePlayerModel {
   }
 
   public async load(src: string | object): Promise<void> {
-    const bytes = await _parseSrc(src);
-    this._loadBytes(bytes);
+    try {
+      const bytes = await _parseSrc(src);
+      this.dispatchEvent(new CustomEvent(PlayerEvent.Ready));
+
+      this._loadBytes(bytes);
+    } catch (err) {
+      this.currentState = PlayerState.Error;
+      this.dispatchEvent(new CustomEvent(PlayerEvent.Error));
+    }
   }
 
   public play(): void {
@@ -207,18 +224,32 @@ export class LottiePlayer extends LottiePlayerModel {
 
   public pause(): void {
     this.currentState = PlayerState.Paused;
+    this.dispatchEvent(new CustomEvent(PlayerEvent.Pause));
   }
 
   public stop(): void {
     this.currentState = PlayerState.Stopped;
     this.currentFrame = 0;
     this.TVG.frame(0);
+
+    this.dispatchEvent(new CustomEvent(PlayerEvent.Stop));
   }
 
   public seek(frame: number): void {
     this._frame(frame);
     this._update();
     this._render();
+  }
+
+  public destroy(): void {
+    if (!this.TVG) {
+      return;
+    }
+
+    this.TVG = null;
+    this.currentState = PlayerState.Destroyed;
+    this.dispatchEvent(new CustomEvent(PlayerEvent.Destroyed));
+    this.remove();
   }
 
   public setLooping(value: boolean): void {

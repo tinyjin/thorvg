@@ -15,7 +15,6 @@ export enum ExportableType {
 export enum PlayerState {
   Destroyed = "destroyed",
   Error = "error",
-  Frozen = "frozen",
   Loading = "loading",
   Paused = "paused",
   Playing = "playing",
@@ -34,13 +33,11 @@ export enum PlayerEvent {
   Destroyed = "destroyed",
   Error = "error",
   Frame = "frame",
-  Freeze = "freeze",
   Load = "load",
   Loop = "loop",
   Pause = "pause",
   Play = "play",
   Ready = "ready",
-  Rendered = "rendered",
   Stop = "stop",
 }
 
@@ -137,6 +134,11 @@ export abstract class LottiePlayerModel extends LitElement {
    * @param frame Frame number to move
    */
   public abstract seek (frame: number): void;
+
+  /**
+   * Destroy animation and lottie-player element.
+   */
+  public abstract destroy (): void;
 
   /**
    * Sets the repeating of the animation.
