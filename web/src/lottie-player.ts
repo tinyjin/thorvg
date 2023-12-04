@@ -61,6 +61,20 @@ const _wait = (timeToDelay: number) => {
   return new Promise((resolve) => setTimeout(resolve, timeToDelay))
 };
 
+const _observerCallback = (entries: IntersectionObserverEntry[]) => {
+  const entry = entries[0];
+  const target = entry.target as LottiePlayer;
+  
+  if (entry.isIntersecting) {
+    if (target.currentState === PlayerState.Frozen) {
+      target.play();
+    }
+  } else if (target.currentState === PlayerState.Playing) {
+    target.freeze();
+    target.dispatchEvent(new CustomEvent(PlayerEvent.Freeze));
+  }
+}
+
 @customElement('lottie-player')
 export class LottiePlayer extends LottiePlayerModel {
   private TVG?: any;
@@ -70,6 +84,7 @@ export class LottiePlayer extends LottiePlayerModel {
   private _counter: number = 1;
 
   private _timer: any;
+  private _observer?: IntersectionObserver;
 
   constructor() {
     super();
@@ -104,6 +119,9 @@ export class LottiePlayer extends LottiePlayerModel {
     this.canvas = this.shadowRoot!.querySelector('#thorvg-canvas') as HTMLCanvasElement;
     this.canvas.width = this.canvas.offsetWidth;
     this.canvas.height = this.canvas.offsetHeight;
+
+    this._observer = new IntersectionObserver(_observerCallback);
+    this._observer.observe(this);
 
     if (this.src) {
       if (this.TVG) {
@@ -258,6 +276,11 @@ export class LottiePlayer extends LottiePlayerModel {
     this.dispatchEvent(new CustomEvent(PlayerEvent.Stop));
   }
 
+  public freeze(): void {
+    this.currentState = PlayerState.Frozen;
+    this.dispatchEvent(new CustomEvent(PlayerEvent.Freeze));
+  }
+
   public async seek(frame: number): Promise<void> {
     this._frame(frame);
     await this._update();
@@ -271,6 +294,12 @@ export class LottiePlayer extends LottiePlayerModel {
 
     this.TVG = null;
     this.currentState = PlayerState.Destroyed;
+
+    if (this._observer) {
+      this._observer.disconnect();
+      this._observer = undefined;
+    }
+    
     this.dispatchEvent(new CustomEvent(PlayerEvent.Destroyed));
     this.remove();
   }

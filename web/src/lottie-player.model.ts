@@ -15,6 +15,7 @@ export enum ExportableType {
 export enum PlayerState {
   Destroyed = "destroyed",
   Error = "error",
+  Frozen = "frozen",
   Loading = "loading",
   Paused = "paused",
   Playing = "playing",
@@ -33,6 +34,7 @@ export enum PlayerEvent {
   Destroyed = "destroyed",
   Error = "error",
   Frame = "frame",
+  Freeze = "freeze",
   Load = "load",
   Loop = "loop",
   Pause = "pause",
@@ -127,6 +129,11 @@ export abstract class LottiePlayerModel extends LitElement {
    * Stop animation.
    */
   public abstract stop (): void;
+
+  /**
+   * Freeze animation.
+   */
+  public abstract freeze (): void;
 
   /**
    * Seek to a given frame
