@@ -180,5 +180,5 @@ export abstract class LottiePlayerModel extends LitElement {
   /**
    * Returns thorvg version
    */
-  public abstract getVersions (): LibraryVersion;
+  public abstract getVersion (): LibraryVersion;
 }

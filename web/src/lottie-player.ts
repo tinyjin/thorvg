@@ -4,6 +4,7 @@ import { customElement } from 'lit/decorators.js';
 // @ts-ignore: WASM Glue code doesn't have type & Only available on build progress
 import Module from '../dist/thorvg-wasm';
 import { ExportableType, LibraryVersion, LottiePlayerModel, PlayerEvent, PlayerState } from './lottie-player.model';
+import { THORVG_VERSION } from './version';
 
 let _tvg: any;
 (async () => {  
@@ -292,8 +293,10 @@ export class LottiePlayer extends LottiePlayerModel {
     throw new Error('Method not implemented.');
   }
 
-  public getVersions(): LibraryVersion {
-    throw new Error('Method not implemented.');
+  public getVersion(): LibraryVersion {
+    return {
+      THORVG_VERSION,
+    };
   }
 
   public render (): TemplateResult {
