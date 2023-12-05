@@ -7,9 +7,10 @@ import { ExportableType, LibraryVersion, LottiePlayerModel, PlayerEvent, PlayerS
 import { THORVG_VERSION } from './version';
 
 let _tvg: any;
+let _module: any;
 (async () => {  
-  const module = await Module();
-  _tvg = new module.TvgLottieAnimation();
+  _module = await Module();
+  _tvg = new _module.TvgLottieAnimation();
 })();
 
 /**
@@ -289,8 +290,34 @@ export class LottiePlayer extends LottiePlayerModel {
     this.canvas!.style.backgroundColor = value;
   }
 
-  public save(target: ExportableType): void {
-    throw new Error('Method not implemented.');
+  public async save(target: ExportableType): Promise<void> {
+    if (!this.TVG || !this.src) {
+      return;
+    }
+
+    const bytes = await _parseSrc(this.src);
+    
+    switch (target) {
+      case ExportableType.GIF:
+        const isExported = this.TVG.save2Gif(bytes, 'lottie', this.canvas!.width, this.canvas!.height, 30);
+        if (!isExported) {
+          throw new Error('Unable to save a GIF. Error: ', this.TVG.error());
+        }
+
+        const data = _module.FS.readFile('output.gif');
+        if (data.length < 6) {
+          throw new Error("Unable to save the Gif data. The generated file size is invalid.");
+        }
+
+        const blob = new Blob([data], {type: 'application/octet-stream'});
+        const link = document.createElement("a");
+        link.setAttribute('href', URL.createObjectURL(blob));
+        link.setAttribute('download', 'output.gif');
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        break;
+    }
   }
 
   public getVersion(): LibraryVersion {
