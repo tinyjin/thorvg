@@ -2,11 +2,20 @@
   "name": "@thorvg/lottie-player",
   "version": "0.1.0",
   "description": "A web lottie player using ThorVG as a renderer",
-  "main": "index.js",
+  "main": "./dist/lottie-player.cjs.js",
+  "module": "./dist/lottie-player.esm.js",
+  "exports": {
+    ".": {
+      "import": "./dist/lottie-player.cjs.js",
+      "require": "./dist/lottie-player.esm.js"
+    }
+  },
+  "types": "./dist/lottie-player.d.ts",
   "scripts": {
-    "build": "npm run clean && npm run copy:wasm && rollup -c --bundleConfigAsCjs",
-    "copy:wasm": "cp ../build_wasm/src/bindings/wasm/thorvg-wasm.{wasm,js} ./dist",
-    "clean": "rm -rf dist && mkdir dist",
+    "build": "npm run clean && npm run copy:wasm && rollup -c --bundleConfigAsCjs && rm -rf ./dist/thorvg-wasm.js",
+    "build:watch": "npm run clean && npm run copy:wasm && rollup -c --bundleConfigAsCjs --watch",
+    "copy:wasm": "cp ../build_wasm/src/bindings/wasm/thorvg-wasm.js ./dist",
+    "clean": "rm -rf dist && mkdir dist && touch dist/index.js",
     "test": "echo \"Error: no test specified\" && exit 1",
     "lint": "eslint ./src --ext .ts,.tsx,.js",
     "lint:fix": "eslint ./src --ext .ts,.tsx,.js --fix"
@@ -41,10 +50,14 @@
     "eslint-plugin-promise": "^6.0.0",
     "eslint-plugin-wc": "^2.0.4",
     "rollup": "^4.6.0",
+    "rollup-plugin-dts": "^6.1.0",
+    "rollup-plugin-polyfill-node": "^0.13.0",
     "rollup-plugin-swc3": "^0.10.4",
+    "rollup-plugin-terser": "^7.0.2",
     "typescript": "*"
   },
   "dependencies": {
-    "lit": "^3.1.0"
+    "lit": "^3.1.0",
+    "url": "^0.11.3"
   }
 }
