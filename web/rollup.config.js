@@ -48,7 +48,7 @@ export default [
     plugins: [
       nodePolyfills(),
       commonjs({
-        include: /node_modules/
+        include: /node_modules/,
       }),
       swc({
         include: /\.[mc]?[jt]sx?$/,
@@ -73,6 +73,24 @@ export default [
           comments: false,
         },
       }),
+    ],
+  },
+  {
+    input: "./src/worker.js",
+    treeshake: false,
+    plugins: [
+      commonjs({
+        include: /node_modules/,
+      }),
+    ],
+    output: [
+      {
+        file: './dist/worker.js',
+        format: 'iife',
+        globals: {
+          pako: "pako",
+        }
+      }
     ],
   },
   {
