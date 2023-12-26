@@ -22,12 +22,17 @@
 
 #include <thorvg.h>
 #include <emscripten/bind.h>
+#include "tvgCommon.h"
+#include <vector>
 
 using namespace emscripten;
 using namespace std;
 using namespace tvg;
 
 static const char* NoError = "None";
+static unique_ptr<SwCanvas> canvas;
+static int globalIndex = 0;
+static std::vector<unique_ptr<tvg::Animation>> animations;
 
 class __attribute__((visibility("default"))) TvgLottieAnimation
 {
@@ -42,7 +47,7 @@ public:
     {
         return unique_ptr<TvgLottieAnimation>(new TvgLottieAnimation());
     }
-
+    
     string error()
     {
         return errorMsg;
@@ -56,20 +61,26 @@ public:
 
     val duration()
     {
+      for (auto& animation : animations) {
         if (!canvas || !animation) return val(0);
         return val(animation->duration());
+      }
     }
 
     val totalFrame()
     {
+      for (auto& animation : animations) {
         if (!canvas || !animation) return val(0);
         return val(animation->totalFrame());
+      }
     }
 
     val curFrame()
     {
+      for (auto& animation : animations) {
         if (!canvas || !animation) return val(0);
         return val(animation->curFrame());
+      }
     }
 
     // Render methods
@@ -84,9 +95,15 @@ public:
             return false;
         }
 
-        canvas->clear(true);
+        auto animation = Animation::gen();
+        if (!animation) errorMsg = "Invalid animation";
 
-        animation = Animation::gen();
+        //Background
+        // auto shape = tvg::Shape::gen();
+        // shape->appendRect(0, 0, width, height);
+        // shape->fill(75, 75, 75);
+
+        // canvas->push(std::move(shape));
 
         if (animation->picture()->load(data.c_str(), data.size(), mimetype, rpath, false) != Result::Success) {
             errorMsg = "load() fail";
@@ -99,12 +116,34 @@ public:
         this->width = 0;
         this->height = 0;
 
-        resize(width, height);
+        this->width = width;
+        this->height = height;
+
+        free(buffer);
+        buffer = (uint8_t*)malloc(width * height * sizeof(uint32_t));
+        canvas->target((uint32_t *)buffer, width, width, height, SwCanvas::ABGR8888S);
+
+        float scale;
+        float shiftX = 0.0f, shiftY = 0.0f;
+        if (psize[0] > psize[1]) {
+            scale = width / psize[0];
+            shiftY = (height - psize[1] * scale) * 0.5f;
+        } else {
+            scale = height / psize[1];
+            shiftX = (width - psize[0] * scale) * 0.5f;
+        }
+
+        animation->picture()->scale(scale);
+        animation->picture()->translate(shiftX, shiftY);
 
         if (canvas->push(cast(animation->picture())) != Result::Success) {
             errorMsg = "push() fail";
             return false;
         }
+
+        
+        animations.push_back(std::move(animation));
+
 
         updated = true;
 
@@ -115,7 +154,7 @@ public:
     {
         errorMsg = NoError;
 
-        if (!canvas || !animation) return val(typed_memory_view<uint8_t>(0, nullptr));
+        if (!canvas || animations.size() < 1) return val(typed_memory_view<uint8_t>(0, nullptr));
 
         if (!updated) return val(typed_memory_view(width * height * 4, buffer));
 
@@ -147,38 +186,44 @@ public:
 
     bool frame(float no)
     {
-        if (!canvas || !animation) return false;
-        if (animation->frame(no) == Result::Success) {
+        if (!canvas || animations.size() < 1) return false;
+
+        for (auto& animation : animations) {
+          if (animation->frame(no) == Result::Success) {
             updated = true;
-        }
+          }
+        }        
         return true;
     }
 
     void resize(int width, int height)
     {
-        if (!canvas || !animation) return;
-        if (this->width == width && this->height == height) return;
+        for (auto& animation : animations) {
+          if (!canvas || !animation) return;
+          if (this->width == width && this->height == height) return;
 
-        this->width = width;
-        this->height = height;
+          this->width = width;
+          this->height = height;
 
-        free(buffer);
-        buffer = (uint8_t*)malloc(width * height * sizeof(uint32_t));
-        canvas->target((uint32_t *)buffer, width, width, height, SwCanvas::ABGR8888S);
+          free(buffer);
+          buffer = (uint8_t*)malloc(width * height * sizeof(uint32_t));
+          canvas->target((uint32_t *)buffer, width, width, height, SwCanvas::ABGR8888S);
 
-        float scale;
-        float shiftX = 0.0f, shiftY = 0.0f;
-        if (psize[0] > psize[1]) {
-            scale = width / psize[0];
-            shiftY = (height - psize[1] * scale) * 0.5f;
-        } else {
-            scale = height / psize[1];
-            shiftX = (width - psize[0] * scale) * 0.5f;
+          float scale;
+          float shiftX = 0.0f, shiftY = 0.0f;
+          if (psize[0] > psize[1]) {
+              scale = width / psize[0];
+              shiftY = (height - psize[1] * scale) * 0.5f;
+          } else {
+              scale = height / psize[1];
+              shiftX = (width - psize[0] * scale) * 0.5f;
+          }
+
+          animation->picture()->scale(scale / 2);
+          animation->picture()->translate(shiftX, shiftY);
+
+          updated = true;
         }
-        animation->picture()->scale(scale);
-        animation->picture()->translate(shiftX, shiftY);
-
-        updated = true;
     }
 
     // Saver methods
@@ -239,17 +284,15 @@ private:
             return;
         }
 
-        canvas = SwCanvas::gen();
+        if (!canvas) {
+          canvas = SwCanvas::gen();
+        }
         if (!canvas) errorMsg = "Invalid canvas";
-
-        animation = Animation::gen();
-        if (!animation) errorMsg = "Invalid animation";
     }
 
 private:
     string                 errorMsg;
-    unique_ptr<SwCanvas>   canvas = nullptr;
-    unique_ptr<Animation>  animation = nullptr;
+    // unique_ptr<Animation>  animation = nullptr;
     uint8_t*               buffer = nullptr;
     uint32_t               width = 0;
     uint32_t               height = 0;

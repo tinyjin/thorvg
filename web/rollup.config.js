@@ -23,7 +23,7 @@ export default [
         file: './dist/lottie-player.js',
         format: "umd",
         name,
-        minifyInternalExports: true,
+        minifyInternalExports: false,
         inlineDynamicImports: true,
         sourcemap: true,
         globals,
@@ -32,7 +32,7 @@ export default [
         file: pkg.main,
         name,
         format: "cjs",
-        minifyInternalExports: true,
+        minifyInternalExports: false,
         inlineDynamicImports: true,
         sourcemap: true,
         globals,
@@ -68,13 +68,13 @@ export default [
         },
       }),
       nodeResolve(),
-      terser({
-        compress: true,
-        mangle: true,
-        output: {
-          comments: false,
-        },
-      }),
+      // terser({
+      //   compress: true,
+      //   mangle: true,
+      //   output: {
+      //     comments: false,
+      //   },
+      // }),
     ],
   },
   {

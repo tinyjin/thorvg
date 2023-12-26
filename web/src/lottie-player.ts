@@ -221,17 +221,17 @@ export class LottiePlayer extends LitElement {
 
   constructor() {
     super();
-    this._init();
+    // this._init();
   }
 
-  private async _init(): Promise<void> {
-    if (!_tvg) {
-      // throw new Error('ThorVG has not loaded');
-      return;
-    }
+  // private async _init(): Promise<void> {
+  //   if (!_tvg) {
+  //     // throw new Error('ThorVG has not loaded');
+  //     return;
+  //   }
 
-    this._TVG = _tvg;
-  }
+  //   this._TVG = new _module.TvgLottieAnimation();
+  // }
 
   private _delayedLoad(): void {
     if (!_tvg || !this._timer) {
@@ -244,7 +244,26 @@ export class LottiePlayer extends LitElement {
     this._TVG = _tvg;
 
     if (this.src) {
-      this.load(this.src);
+      (async () => {
+        await this.load('https://lottie.host/6d7dd6e2-ab92-4e98-826a-2f8430768886/NGnHQ6brWA.json');
+        // this.load('https://lottie.host/18005c13-f4ba-4f4f-b2be-3e11b1c21212/4o8x9AQP7T.json');
+        await this.load('https://lottie.host/10ac8cc1-3dcf-443e-a3c3-727ae0f26645/lsZgPC4d53.json');
+        await this.load('https://lottie.host/50eb6257-8c2b-4977-b28b-3426518c6ee3/AISviO6OmL.json');
+        await this.load('https://lottie.host/2678f658-b43a-4b37-8c32-f82f53f6595b/nGFgZZdR6x.json');
+        await this.load('https://lottie.host/7d7cea00-fcdc-4daf-bbd0-d7c6085f5fa1/7UGKQgqcB4.json');
+        await this.load('https://lottie.host/6d7dd6e2-ab92-4e98-826a-2f8430768886/NGnHQ6brWA.json');
+        // this.load('https://lottie.host/18005c13-f4ba-4f4f-b2be-3e11b1c21212/4o8x9AQP7T.json');
+        await this.load('https://lottie.host/10ac8cc1-3dcf-443e-a3c3-727ae0f26645/lsZgPC4d53.json');
+        await this.load('https://lottie.host/50eb6257-8c2b-4977-b28b-3426518c6ee3/AISviO6OmL.json');
+        await this.load('https://lottie.host/2678f658-b43a-4b37-8c32-f82f53f6595b/nGFgZZdR6x.json');
+        await this.load('https://lottie.host/7d7cea00-fcdc-4daf-bbd0-d7c6085f5fa1/7UGKQgqcB4.json');
+        await this.load('https://lottie.host/6d7dd6e2-ab92-4e98-826a-2f8430768886/NGnHQ6brWA.json');
+        // this.load('https://lottie.host/18005c13-f4ba-4f4f-b2be-3e11b1c21212/4o8x9AQP7T.json');
+        await this.load('https://lottie.host/10ac8cc1-3dcf-443e-a3c3-727ae0f26645/lsZgPC4d53.json');
+        await this.load('https://lottie.host/50eb6257-8c2b-4977-b28b-3426518c6ee3/AISviO6OmL.json');
+        await this.load('https://lottie.host/2678f658-b43a-4b37-8c32-f82f53f6595b/nGFgZZdR6x.json');
+        await this.load('https://lottie.host/7d7cea00-fcdc-4daf-bbd0-d7c6085f5fa1/7UGKQgqcB4.json');
+      })();
     }
   }
 
@@ -274,11 +293,50 @@ export class LottiePlayer extends LitElement {
     if (!this._TVG) {
       return;
     }
+    // console.time('call');
+    const startTime = performance.now();
+    // const that = this;
+    // window.requestAnimationFrame(this._animLoop.bind(this));
 
+    // const a = new Promise<void>((resolve, reject) => {
+    // });
+    // const b = new Promise<void>((resolve) => {
+    //   that._update();
+    //   resolve();
+    // });
+
+    // const c = new Promise<void>((resolve) => {
+    //   that._render();
+    //   resolve();
+    // })
+
+  // await Promise.all([
+  //   b,c
+  // ]);
+
+    console.time('update');
     if (await this._update()) {
+      console.timeEnd('update');
+
+      console.time('render');
       this._render();
+      console.timeEnd('render');
+
+      console.time('raf');
       window.requestAnimationFrame(this._animLoop.bind(this));
+      console.timeEnd('raf');
     }
+
+    if (!this.callTime) {
+      this.callTime = Math.round(performance.now() - startTime);
+    } else {
+      this.callTime = Math.round((this.callTime + performance.now() - startTime) / 2);
+      console.log(`Call AVG : ${this.callTime}`);
+    }
+
+    // console.log('call');
+    // console.log(`${performance.now() - startTime} ms`);
+    // console.timeEnd('call');
   }
 
   private _loadBytes(data: Uint8Array, rPath: string = ''): void {
@@ -300,22 +358,66 @@ export class LottiePlayer extends LitElement {
     context!.putImageData(this._imageData!, 0, 0);
   }
 
-  private _render(): void {
-    this._TVG.resize(this._canvas!.width, this._canvas!.height);
-    const isUpdated = this._TVG.update();
+  callTime = 0;
+  updateTime = 0;
+  rednerTime = 0;
+  private async _render(): Promise<void> {
+    console.time('tvg call');
 
-    if (!isUpdated) {
-      return;
-    }
+    await Promise.all([
+      // new Promise<void>((resolve) => {
+      //   this._TVG.resize(this._canvas!.width, this._canvas!.height);
+      //   resolve();
+      // }),
+      new Promise<void> ((resolve) => {
+        console.time('tvg update');
+        const isUpdated = this._TVG.update();
+        if (!isUpdated) {
+          return;
+        }
+        resolve();
+        console.timeEnd('tvg update');
+      }),
+      new Promise<void> ((resolve) => {
+        console.time('tvg render');
+        const buffer = this._TVG.render();
+        
+        const clampedBuffer = Uint8ClampedArray.from(buffer);
+        if (clampedBuffer.length < 1) {
+          return;
+        }
+        
+        this._imageData = new ImageData(clampedBuffer, this._canvas!.width, this._canvas!.height);
+        this._flush();
+        
+        console.timeEnd('tvg render');
+        resolve();
+      }),
+    ]);
 
-    const buffer = this._TVG.render();
-    const clampedBuffer = Uint8ClampedArray.from(buffer);
-    if (clampedBuffer.length < 1) {
-      return;
-    }
 
-    this._imageData = new ImageData(clampedBuffer, this._canvas!.width, this._canvas!.height);
-    this._flush();
+    // console.time('tvg update');
+    // const isUpdated = this._TVG.update();
+    // if (!isUpdated) {
+    //   return;
+    // }
+    // console.timeEnd('tvg update');
+    
+
+    // console.time('tvg render');
+    // const buffer = this._TVG.render();
+    
+    // const clampedBuffer = Uint8ClampedArray.from(buffer);
+    // if (clampedBuffer.length < 1) {
+    //   return;
+    // }
+    
+    // this._imageData = new ImageData(clampedBuffer, this._canvas!.width, this._canvas!.height);
+    // this._flush();
+    
+    // console.timeEnd('tvg render');
+
+    console.timeEnd('tvg call');
   }
 
   private async _update(): Promise<boolean> {

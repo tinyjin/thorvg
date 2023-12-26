@@ -256,7 +256,7 @@ int main(int argc, char **argv)
     if (threads > 0) --threads;    //Allow the designated main thread capacity
 
     //Initialize ThorVG Engine
-    if (tvg::Initializer::init(4) == tvg::Result::Success) {
+    if (tvg::Initializer::init(8) == tvg::Result::Success) {
 
         elm_init(argc, argv);
 

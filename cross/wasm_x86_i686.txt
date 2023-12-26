@@ -1,19 +1,18 @@
 [binaries]
-cpp = 'EMSDK:upstream/emscripten/em++.py'
-ar = 'EMSDK:upstream/emscripten/emar.py'
+cpp = '/Users/jinny/Dev/emsdk/upstream/emscripten/em++.py'
+ar = '/Users/jinny/Dev/emsdk/upstream/emscripten/emar.py'
 strip = '-strip'
 
 [properties]
-root = 'EMSDK:upstream/emscripten/system'
+root = '/Users/jinny/Dev/emsdk/upstream/emscripten/system'
 shared_lib_suffix = 'js'
 static_lib_suffix = 'js'
 shared_module_suffix = 'js'
 exe_suffix = 'js'
 
 [built-in options]
-cpp_args = ['-Wshift-negative-value', '-flto', '-Os', '-fno-exceptions']
-cpp_link_args = ['-Wshift-negative-value', '-flto', '-Os', '-fno-exceptions', '--bind', '-sWASM=1', '-sALLOW_MEMORY_GROWTH=1', '-sEXPORT_ES6=1', '-sFORCE_FILESYSTEM=1', '-sMODULARIZE=1', '-sEXPORTED_RUNTIME_METHODS=FS', '-sSINGLE_FILE=1']
-#cpp_link_args = ['-Wshift-negative-value', '-flto', '-Os', '-fno-exceptions', '--bind', '-sWASM=1', '-sALLOW_MEMORY_GROWTH=1', '-sFORCE_FILESYSTEM=1', '-g']   //enable g flag for wasm debugging
+cpp_args = ['-Wshift-negative-value', '-pthread', '-sUSE_PTHREADS=1', '-sPTHREAD_POOL_SIZE=30', '-flto', '-fexceptions', '-Os']
+cpp_link_args = ['-Wshift-negative-value', '-pthread', '-sUSE_PTHREADS=1', '-sPTHREAD_POOL_SIZE=30', '-fexceptions', '-flto', '-Os', '--bind', '-sWASM=1', '-sALLOW_MEMORY_GROWTH=1', '-sEXPORT_ES6=1', '-sFORCE_FILESYSTEM=1', '-sMODULARIZE=1', '-sEXPORTED_RUNTIME_METHODS=FS', '-sSINGLE_FILE=1', '-sASSERTIONS=1']
 
 [host_machine]
 system = 'emscripten'
