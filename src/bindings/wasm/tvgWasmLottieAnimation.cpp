@@ -31,7 +31,6 @@ using namespace tvg;
 
 static const char* NoError = "None";
 static unique_ptr<SwCanvas> canvas;
-static int globalIndex = 0;
 static std::vector<unique_ptr<tvg::Animation>> animations;
 
 class __attribute__((visibility("default"))) TvgLottieAnimation
@@ -279,7 +278,7 @@ private:
     {
         errorMsg = NoError;
 
-        if (Initializer::init(0) != Result::Success) {
+        if (Initializer::init(4) != Result::Success) {
             errorMsg = "init() fail";
             return;
         }

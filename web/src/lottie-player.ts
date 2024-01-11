@@ -246,19 +246,6 @@ export class LottiePlayer extends LitElement {
     if (this.src) {
       (async () => {
         await this.load('https://lottie.host/6d7dd6e2-ab92-4e98-826a-2f8430768886/NGnHQ6brWA.json');
-        // this.load('https://lottie.host/18005c13-f4ba-4f4f-b2be-3e11b1c21212/4o8x9AQP7T.json');
-        await this.load('https://lottie.host/10ac8cc1-3dcf-443e-a3c3-727ae0f26645/lsZgPC4d53.json');
-        await this.load('https://lottie.host/50eb6257-8c2b-4977-b28b-3426518c6ee3/AISviO6OmL.json');
-        await this.load('https://lottie.host/2678f658-b43a-4b37-8c32-f82f53f6595b/nGFgZZdR6x.json');
-        await this.load('https://lottie.host/7d7cea00-fcdc-4daf-bbd0-d7c6085f5fa1/7UGKQgqcB4.json');
-        await this.load('https://lottie.host/6d7dd6e2-ab92-4e98-826a-2f8430768886/NGnHQ6brWA.json');
-        // this.load('https://lottie.host/18005c13-f4ba-4f4f-b2be-3e11b1c21212/4o8x9AQP7T.json');
-        await this.load('https://lottie.host/10ac8cc1-3dcf-443e-a3c3-727ae0f26645/lsZgPC4d53.json');
-        await this.load('https://lottie.host/50eb6257-8c2b-4977-b28b-3426518c6ee3/AISviO6OmL.json');
-        await this.load('https://lottie.host/2678f658-b43a-4b37-8c32-f82f53f6595b/nGFgZZdR6x.json');
-        await this.load('https://lottie.host/7d7cea00-fcdc-4daf-bbd0-d7c6085f5fa1/7UGKQgqcB4.json');
-        await this.load('https://lottie.host/6d7dd6e2-ab92-4e98-826a-2f8430768886/NGnHQ6brWA.json');
-        // this.load('https://lottie.host/18005c13-f4ba-4f4f-b2be-3e11b1c21212/4o8x9AQP7T.json');
         await this.load('https://lottie.host/10ac8cc1-3dcf-443e-a3c3-727ae0f26645/lsZgPC4d53.json');
         await this.load('https://lottie.host/50eb6257-8c2b-4977-b28b-3426518c6ee3/AISviO6OmL.json');
         await this.load('https://lottie.host/2678f658-b43a-4b37-8c32-f82f53f6595b/nGFgZZdR6x.json');
@@ -314,24 +301,24 @@ export class LottiePlayer extends LitElement {
   //   b,c
   // ]);
 
-    console.time('update');
+    // console.time('update');
     if (await this._update()) {
-      console.timeEnd('update');
+      // console.timeEnd('update');
 
-      console.time('render');
+      // console.time('render');
       this._render();
-      console.timeEnd('render');
+      // console.timeEnd('render');
 
-      console.time('raf');
+      // console.time('raf');
       window.requestAnimationFrame(this._animLoop.bind(this));
-      console.timeEnd('raf');
+      // console.timeEnd('raf');
     }
 
     if (!this.callTime) {
       this.callTime = Math.round(performance.now() - startTime);
     } else {
       this.callTime = Math.round((this.callTime + performance.now() - startTime) / 2);
-      console.log(`Call AVG : ${this.callTime}`);
+      console.log(`framing AVG per a frame : ${this.callTime}ms`);
     }
 
     // console.log('call');
