@@ -28,7 +28,7 @@ option('vector',
 
 option('bindings',
    type: 'array',
-   choices: ['', 'capi', 'wasm_beta'],
+   choices: ['', 'capi', 'wasm_beta', 'flutter_beta'],
    value: [''],
    description: 'Enable API bindings')
 

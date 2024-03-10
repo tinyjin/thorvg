@@ -62,7 +62,7 @@ if all_loaders or get_option('loaders').contains('ttf') == true
     config_h.set10('THORVG_TTF_LOADER_SUPPORT', true)
 endif
 
-if all_loaders or get_option('loaders').contains('webp') == true
+if get_option('loaders').contains('webp_beta') == true
     config_h.set10('THORVG_WEBP_LOADER_SUPPORT', true)
 endif
 
@@ -102,6 +102,10 @@ endif
 
 if get_option('bindings').contains('wasm_beta') == true
     config_h.set10('THORVG_WASM_BINDING_SUPPORT', true)
+endif
+
+if get_option('bindings').contains('flutter_beta') == true
+    config_h.set10('THORVG_FLUTTER_BINDING_SUPPORT', true)
 endif
 
 #Log
@@ -153,12 +157,13 @@ Summary:
     Saver (GIF):             @16@
     Binding (CAPI):          @17@
     Binding (WASM_BETA):     @18@
-    Log Message:             @19@
-    Tests:                   @20@
-    Examples:                @21@
-    Tool (Svg2Tvg):          @22@
-    Tool (Svg2Png):          @23@
-    Tool (Lottie2Gif):       @24@
+    Binding (FLUTTER_BETA):  @19@
+    Log Message:             @20@
+    Tests:                   @21@
+    Examples:                @22@
+    Tool (Svg2Tvg):          @23@
+    Tool (Svg2Png):          @24@
+    Tool (Lottie2Gif):       @25@
 
 '''.format(
         meson.project_version(),
@@ -180,6 +185,7 @@ Summary:
         all_savers or get_option('savers').contains('gif'),
         get_option('bindings').contains('capi'),
         get_option('bindings').contains('wasm_beta'),
+        get_option('bindings').contains('flutter_beta'),
         get_option('log'),
         get_option('tests'),
         get_option('examples'),

@@ -5,3 +5,7 @@ endif
 if get_option('bindings').contains('wasm_beta') == true
     subdir('wasm')
 endif
+
+if get_option('bindings').contains('flutter_beta') == true
+    subdir('flutter')
+endif
