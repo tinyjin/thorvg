@@ -10,6 +10,7 @@ extern "C"
 
 
 FlutterLottieAnimation *create();
+bool destroy(FlutterLottieAnimation *animation);
 char *error(FlutterLottieAnimation *animation);
 float *size(FlutterLottieAnimation *animation);
 float duration(FlutterLottieAnimation *animation);

@@ -248,6 +248,13 @@ extern "C"
         return (FlutterLottieAnimation *)TvgLottieAnimation::create().release();
     }
 
+    bool destroy(FlutterLottieAnimation *animation)
+    {
+        if (!animation) return false;
+        delete(reinterpret_cast<TvgLottieAnimation*>(animation));
+        return true;
+    }
+
     char *error(FlutterLottieAnimation *animation)
     {
         return reinterpret_cast<TvgLottieAnimation *>(animation)->error();
