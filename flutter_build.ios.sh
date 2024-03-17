@@ -14,5 +14,11 @@ fi
 
 ninja -C build_flutter_x86_64/
 
-ls -lrt build_flutter_aarch64/src/bindings/flutter/libthorvg.dylib
-ls -lrt build_flutter_x86_64/src/bindings/flutter/libthorvg.dylib
+mkdir build_flutter_ios
+
+# Legacy fat binary (aarch64 simulator not supported)
+lipo build_flutter_x86_64/src/bindings/flutter/libthorvg.dylib \
+build_flutter_aarch64/src/bindings/flutter/libthorvg.dylib \
+-output build_flutter_ios/libthorvg.dylib -create
+
+ls -lrt build_flutter_ios/libthorvg.dylib
