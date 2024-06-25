@@ -103,6 +103,7 @@ private:
     void parseStrokeDash(LottieStroke* stroke);
     void parseGradient(LottieGradient* gradient, const char* key);
     void parseTextRange(LottieText* text);
+    void parseTextAlignmentOptions(LottieText* text);
     void parseAssets();
     void parseFonts();
     void parseChars(Array<LottieGlyph*>& glyphes);

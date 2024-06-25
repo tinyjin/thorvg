@@ -218,6 +218,8 @@ struct LottieMarker
 
 struct LottieText : LottieObject
 {
+    enum Grouping : uint8_t { Chars = 1, Word, Line, All };
+
     void prepare()
     {
         LottieObject::type = LottieObject::Text;
@@ -232,6 +234,8 @@ struct LottieText : LottieObject
     LottieTextDoc doc;
     LottieFont* font;
     LottieFloat spacing = 0.0f;  //letter spacing
+    Grouping grouping = Chars;
+    LottiePoint alignment = Point{0.0f, 0.0f};
     Array<LottieTextRange*> ranges;
 
     ~LottieText()

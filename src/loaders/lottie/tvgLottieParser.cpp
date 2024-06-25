@@ -1158,6 +1158,17 @@ void LottieParser::parseTextRange(LottieText* text)
 }
 
 
+void LottieParser::parseTextAlignmentOptions(LottieText* text)
+{
+    enterObject();
+    while (auto key = nextObjectKey()) {
+        if (KEY_AS("g")) text->grouping = (LottieText::Grouping) getInt();
+        else if (KEY_AS("a")) parseProperty<LottieProperty::Type::Point>(text->alignment);
+        else skip(key);
+    }
+}
+
+
 void LottieParser::parseText(Array<LottieObject*>& parent)
 {
     enterObject();
@@ -1167,8 +1178,8 @@ void LottieParser::parseText(Array<LottieObject*>& parent)
     while (auto key = nextObjectKey()) {
         if (KEY_AS("d")) parseProperty<LottieProperty::Type::TextDoc>(text->doc, text);
         else if (KEY_AS("a")) parseTextRange(text);
+        else if (KEY_AS("m")) parseTextAlignmentOptions(text);
         //else if (KEY_AS("p")) TVGLOG("LOTTIE", "Text Follow Path (p) is not supported"); 
-        //else if (KEY_AS("m")) TVGLOG("LOTTIE", "Text Alignment Option (m) is not supported");
         else skip(key);
     }
 
