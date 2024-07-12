@@ -23,6 +23,8 @@
 #include <thorvg.h>
 #include <emscripten/bind.h>
 #include "tvgPicture.h"
+#include <webgpu/webgpu.h>
+#include <emscripten/emscripten.h>
 
 using namespace emscripten;
 using namespace std;
@@ -186,7 +188,7 @@ public:
 
         free(buffer);
         buffer = (uint8_t*)malloc(width * height * sizeof(uint32_t));
-        canvas->target((uint32_t *)buffer, width, width, height, SwCanvas::ABGR8888S);
+        canvas->target((uint32_t *)buffer, width, width, height, WgCanvas::ABGR8888S);
 
         float scale;
         float shiftX = 0.0f, shiftY = 0.0f;
@@ -312,13 +314,27 @@ private:
     explicit TvgLottieAnimation()
     {
         errorMsg = NoError;
+        auto engine = tvg::CanvasEngine::Wg;
 
-        if (Initializer::init(0) != Result::Success) {
+        //Init WebGPU
+        // instance
+        WGPUInstanceDescriptor desc = {.nextInChain = nullptr};
+        // https://eliemichel.github.io/LearnWebGPU/getting-started/hello-webgpu.html#building-for-the-web
+        // should be nullptr
+        instance = wgpuCreateInstance(nullptr);
+
+        // surface
+        WGPUSurfaceDescriptor surfaceDesc{};
+        surfaceDesc.nextInChain = (const WGPUChainedStruct*)&surfaceNativeDesc;
+        surfaceDesc.label = "The surface";
+        surface = wgpuInstanceCreateSurface(instance, &surfaceDesc);
+
+        if (Initializer::init(0 engine) != Result::Success) {
             errorMsg = "init() fail";
             return;
         }
 
-        canvas = SwCanvas::gen();
+        canvas = WgCanvas::gen();
         if (!canvas) errorMsg = "Invalid canvas";
 
         animation = Animation::gen();
@@ -327,7 +343,10 @@ private:
 
 private:
     string                 errorMsg;
-    unique_ptr<SwCanvas>   canvas = nullptr;
+    unique_ptr<WgCanvas>   canvas = nullptr;
+    WGPUInstance instance;
+    WGPUSurface surface;
+
     unique_ptr<Animation>  animation = nullptr;
     string                 data;
     uint8_t*               buffer = nullptr;

@@ -19,10 +19,12 @@ source_file = [
     'tvgWgShaderTypes.cpp'
 ]
 
-wgpu_dep = dependency('wgpu_native')
+# link emscripten webgpu.h
+config_h = configuration_data()
+config_h.set10('THORVG_WG_RASTER_SUPPORT', true)
+
 
 engine_dep += [declare_dependency(
-    dependencies        : wgpu_dep,
     include_directories : include_directories('.'),
     sources : source_file
 )]
