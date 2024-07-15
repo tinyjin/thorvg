@@ -23,6 +23,10 @@ source_file = [
 config_h = configuration_data()
 config_h.set10('THORVG_WG_RASTER_SUPPORT', true)
 
+# wgpu_dep = cc.find_library('webgpu', required: true)
+# wgpu_dep = dependency('webgpu', required: false)
+
+
 
 engine_dep += [declare_dependency(
     include_directories : include_directories('.'),

@@ -23,7 +23,7 @@
 #include <thorvg.h>
 #include <emscripten/bind.h>
 #include "tvgPicture.h"
-#include <webgpu/webgpu.h>
+#include <webgpu.h>
 #include <emscripten/emscripten.h>
 
 using namespace emscripten;
@@ -188,7 +188,8 @@ public:
 
         free(buffer);
         buffer = (uint8_t*)malloc(width * height * sizeof(uint32_t));
-        canvas->target((uint32_t *)buffer, width, width, height, WgCanvas::ABGR8888S);
+        // canvas->target((uint32_t *)buffer, width, width, height, WgCanvas::ABGR8888S);
+        canvas->target(this->instance, this->surface, width, height);
 
         float scale;
         float shiftX = 0.0f, shiftY = 0.0f;
@@ -324,12 +325,15 @@ private:
         instance = wgpuCreateInstance(nullptr);
 
         // surface
-        WGPUSurfaceDescriptor surfaceDesc{};
-        surfaceDesc.nextInChain = (const WGPUChainedStruct*)&surfaceNativeDesc;
-        surfaceDesc.label = "The surface";
+        WGPUSurfaceDescriptorFromCanvasHTMLSelector canvasDesc{};
+        canvasDesc.chain.next = NULL;
+        canvasDesc.chain.sType = WGPUSType_SurfaceDescriptorFromCanvasHTMLSelector;
+        canvasDesc.selector = "#thorvg-canvas";
+
+        WGPUSurfaceDescriptor surfaceDesc{.nextInChain = &canvasDesc.chain};
         surface = wgpuInstanceCreateSurface(instance, &surfaceDesc);
 
-        if (Initializer::init(0 engine) != Result::Success) {
+        if (Initializer::init(0, engine) != Result::Success) {
             errorMsg = "init() fail";
             return;
         }
