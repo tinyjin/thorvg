@@ -12,7 +12,7 @@ exe_suffix = 'js'
 
 [built-in options]
 cpp_args = ['-Wshift-negative-value', '-flto', '-Os', '-fno-exceptions']
-cpp_link_args = ['-Wshift-negative-value', '-flto', '-Os', '-fno-exceptions', '--bind', '-sWASM=1', '-sALLOW_MEMORY_GROWTH=1', '-sEXPORT_ES6=1', '-sFORCE_FILESYSTEM=1', '-sMODULARIZE=1', '-sEXPORTED_RUNTIME_METHODS=FS', '-sASYNCIFY=1', '-sUSE_WEBGPU=1', '-sERROR_ON_UNDEFINED_SYMBOLS=0']
+cpp_link_args = ['-Wshift-negative-value', '-flto', '-Os', '-fno-exceptions', '--bind', '-sWASM=1', '-sALLOW_MEMORY_GROWTH=1', '-sEXPORT_ES6=1', '-sFORCE_FILESYSTEM=1', '-sMODULARIZE=1', '-sEXPORTED_RUNTIME_METHODS=FS', '-sASYNCIFY=1', '-sUSE_WEBGPU=1', '-sUSE_GLFW=3', '-sERROR_ON_UNDEFINED_SYMBOLS=0', '-g']
 #cpp_link_args = ['-Wshift-negative-value', '-flto', '-Os', '-fno-exceptions', '--bind', '-sWASM=1', '-sALLOW_MEMORY_GROWTH=1', '-sFORCE_FILESYSTEM=1', '-g']   //enable g flag for wasm debugging
 
 [host_machine]

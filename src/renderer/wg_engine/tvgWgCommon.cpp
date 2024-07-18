@@ -59,6 +59,7 @@ void WgContext::initialize(WGPUInstance instance, WGPUSurface surface)
     // adapter enumerate features
     size_t featuresCount = wgpuAdapterEnumerateFeatures(adapter, featureNames);
     wgpuAdapterGetProperties(adapter, &adapterProperties);
+    // wgpuAdapterGetInfo(adapter, &adapterProperties); // need to change to this?
 
     // NOTE(Jinny): TODO: wgpuAdapterGetLimits unimplemented)
     // wgpuAdapterGetLimits(adapter, &supportedLimits);
@@ -68,7 +69,7 @@ void WgContext::initialize(WGPUInstance instance, WGPUSurface surface)
     deviceDesc.nextInChain = nullptr;
     deviceDesc.label = "The device";
     deviceDesc.requiredFeatureCount = featuresCount;
-    deviceDesc.requiredFeatures = featureNames;
+    // deviceDesc.requiredFeatures = featureNames;
     deviceDesc.requiredLimits = nullptr;
     deviceDesc.defaultQueue.nextInChain = nullptr;
     deviceDesc.defaultQueue.label = "The default queue";
@@ -83,14 +84,14 @@ void WgContext::initialize(WGPUInstance instance, WGPUSurface surface)
     // request device
     wgpuAdapterRequestDevice(adapter, &deviceDesc, onDeviceRequestEnded, &device);
     while (!device) {
-      emscripten_sleep(100);
+        emscripten_sleep(100);
     }
     assert(device);
 
     // std::cout << "test" << std::endl;
-    EM_ASM({
-        alert('done1');
-    });
+    // EM_ASM({
+    //     alert('done1');
+    // });
 
     // on device error function
     auto onDeviceError = [](WGPUErrorType type, char const* message, void* pUserData) {
@@ -105,9 +106,9 @@ void WgContext::initialize(WGPUInstance instance, WGPUSurface surface)
     queue = wgpuDeviceGetQueue(device);
     assert(queue);
 
-    EM_ASM({
-        alert('done2');
-    });
+    // EM_ASM({
+    //     alert('done2');
+    // });
     
     // create default nearest and linear samplers
     samplerNearest = createSampler(WGPUFilterMode_Nearest, WGPUMipmapFilterMode_Nearest);
@@ -117,9 +118,9 @@ void WgContext::initialize(WGPUInstance instance, WGPUSurface surface)
     allocateIndexBufferFan(1024);
     assert(indexBufferFan);
 
-    EM_ASM({
-        alert('done3');
-    });
+    // EM_ASM({
+    //     alert('done3');
+    // });
 
 }
 
