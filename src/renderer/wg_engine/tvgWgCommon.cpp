@@ -21,6 +21,9 @@
  */
 
 #include "tvgWgCommon.h"
+#ifdef __EMSCRIPTEN__
+#include <emscripten.h>
+#endif
 #include <iostream>
 
 //*****************************************************************************
@@ -50,12 +53,12 @@ void WgContext::initialize(WGPUInstance instance, WGPUSurface surface)
     };
     // request adapter
     wgpuInstanceRequestAdapter(instance, &requestAdapterOptions, onAdapterRequestEnded, &adapter);
-    assert(adapter);
+    #ifdef __EMSCRIPTEN__
+    while (!adapter) emscripten_sleep(10);
+    #endif
 
-    // adapter enumerate features
+    // get feature names
     size_t featuresCount = wgpuAdapterEnumerateFeatures(adapter, featureNames);
-    wgpuAdapterGetProperties(adapter, &adapterProperties);
-    wgpuAdapterGetLimits(adapter, &supportedLimits);
 
     // request device
     WGPUDeviceDescriptor deviceDesc{};
@@ -76,7 +79,9 @@ void WgContext::initialize(WGPUInstance instance, WGPUSurface surface)
     };
     // request device
     wgpuAdapterRequestDevice(adapter, &deviceDesc, onDeviceRequestEnded, &device);
-    assert(device);
+    #ifdef __EMSCRIPTEN__
+    while (!device) emscripten_sleep(10);
+    #endif
 
     // on device error function
     auto onDeviceError = [](WGPUErrorType type, char const* message, void* pUserData) {
@@ -535,8 +540,10 @@ WGPUShaderModule WgPipeline::createShaderModule(WGPUDevice device, const char* c
     WGPUShaderModuleDescriptor shaderModuleDesc{};
     shaderModuleDesc.nextInChain = &shaderModuleWGSLDesc.chain;
     shaderModuleDesc.label = label;
+    #ifndef __EMSCRIPTEN__
     shaderModuleDesc.hintCount = 0;
     shaderModuleDesc.hints = nullptr;
+    #endif
     return wgpuDeviceCreateShaderModule(device, &shaderModuleDesc);
 }
 
