@@ -24,6 +24,7 @@
 
 #ifdef THORVG_WG_RASTER_SUPPORT
     #include "tvgWgRenderer.h"
+    #include <emscripten.h>
 #endif
 
 /************************************************************************/
@@ -67,9 +68,19 @@ Result WgCanvas::target(void* instance, void* surface, uint32_t w, uint32_t h) n
     auto renderer = static_cast<WgRenderer*>(Canvas::pImpl->renderer);
     if (!renderer) return Result::MemoryCorruption;
 
+        EM_ASM(
+            console.log('target 1');
+        );
     if (!renderer->target((WGPUInstance)instance, (WGPUSurface)surface, w, h)) return Result::Unknown;
     Canvas::pImpl->vport = {0, 0, (int32_t)w, (int32_t)h};
+    EM_ASM(
+            console.log('target 2');
+        );
     renderer->viewport(Canvas::pImpl->vport);
+
+    EM_ASM(
+            console.log('target 3');
+        );
 
     //Paints must be updated again with this new target.
     Canvas::pImpl->status = Status::Damaged;

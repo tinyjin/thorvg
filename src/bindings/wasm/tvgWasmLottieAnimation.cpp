@@ -23,6 +23,8 @@
 #include <thorvg.h>
 #include <emscripten/bind.h>
 #include "tvgPicture.h"
+#include <webgpu/webgpu.h>
+#include <emscripten.h>
 
 using namespace emscripten;
 using namespace std;
@@ -36,6 +38,8 @@ public:
     ~TvgLottieAnimation()
     {
         free(buffer);
+        wgpuSurfaceRelease(surface);
+        wgpuInstanceRelease(instance);
         Initializer::term();
     }
 
@@ -74,8 +78,16 @@ public:
     }
 
     // Render methods
-    bool load(string data, string mimetype, int width, int height, string rpath = "")
+    bool load(string data, string mimetype, int width, int height, string selector = "", string rpath = "")
     {
+        this->selector = selector;
+
+        this->resize(width, height);
+
+        EM_ASM(
+            console.log('load load!');
+        );
+
         errorMsg = NoError;
 
         if (!canvas) return false;
@@ -97,18 +109,37 @@ public:
             filetype = "lottie";
         }
 
+        EM_ASM(
+            console.log('hellllo! 1');
+        );
+
         if (animation->picture()->load(data.c_str(), data.size(), filetype, rpath, false) != Result::Success) {
             errorMsg = "load() fail";
             return false;
         }
 
-        animation->picture()->size(&psize[0], &psize[1]);
+        // animation->picture()->size(&psize[0], &psize[1]);
 
         /* need to reset size to calculate scale in Picture.size internally before calling resize() */
-        this->width = 0;
-        this->height = 0;
+        // this->width = 0;
+        // this->height = 0;
 
-        resize(width, height);
+        float w{}, h{};
+        animation->picture()->size(&w, &h);
+
+        float scale{};
+        float shiftX = 0.0f, shiftY = 0.0f;
+        if (w > h) {
+            scale = width / w;
+            shiftY = (height - h * scale) * 0.5f;
+        } else {
+            scale = height / h;
+            shiftX = (width - w * scale) * 0.5f;
+        }
+        animation->picture()->scale(scale);
+        animation->picture()->translate(shiftX, shiftY);
+
+        // resize(width, height);
 
         if (canvas->push(cast(animation->picture())) != Result::Success) {
             errorMsg = "push() fail";
@@ -178,27 +209,57 @@ public:
 
     void resize(int width, int height)
     {
-        if (!canvas || !animation) return;
-        if (this->width == width && this->height == height) return;
+        // if (!canvas || !animation) return;
+        // if (this->width == width && this->height == height) return;
+
+        EM_ASM(
+            console.log('resize 1');
+        );
+
+        // instance
+        instance = wgpuCreateInstance(nullptr);
+
+        EM_ASM(
+            console.log('resize 2');
+        );
+
+        // surface
+        WGPUSurfaceDescriptorFromCanvasHTMLSelector canvasDesc{};
+        canvasDesc.chain.next = nullptr;
+        canvasDesc.chain.sType = WGPUSType_SurfaceDescriptorFromCanvasHTMLSelector;
+        canvasDesc.selector = this->selector.c_str();
+        WGPUSurfaceDescriptor surfaceDesc{};
+        surfaceDesc.nextInChain = &canvasDesc.chain;
+        surface = wgpuInstanceCreateSurface(instance, &surfaceDesc);
+
+        EM_ASM(
+            console.log('resize 3');
+        );
 
         this->width = width;
         this->height = height;
 
-        free(buffer);
-        buffer = (uint8_t*)malloc(width * height * sizeof(uint32_t));
-        canvas->target((uint32_t *)buffer, width, width, height, SwCanvas::ABGR8888S);
+        auto res = canvas->target(this->instance, this->surface, width, height);
 
-        float scale;
-        float shiftX = 0.0f, shiftY = 0.0f;
-        if (psize[0] > psize[1]) {
-            scale = width / psize[0];
-            shiftY = (height - psize[1] * scale) * 0.5f;
-        } else {
-            scale = height / psize[1];
-            shiftX = (width - psize[0] * scale) * 0.5f;
-        }
-        animation->picture()->scale(scale);
-        animation->picture()->translate(shiftX, shiftY);
+        EM_ASM(
+            console.log('resize 4');
+        );
+
+        // free(buffer);
+        // buffer = (uint8_t*)malloc(width * height * sizeof(uint32_t));
+        // canvas->target((uint32_t *)buffer, width, width, height, SwCanvas::ABGR8888S);
+
+        // float scale;
+        // float shiftX = 0.0f, shiftY = 0.0f;
+        // if (psize[0] > psize[1]) {
+        //     scale = width / psize[0];
+        //     shiftY = (height - psize[1] * scale) * 0.5f;
+        // } else {
+        //     scale = height / psize[1];
+        //     shiftX = (width - psize[0] * scale) * 0.5f;
+        // }
+        // animation->picture()->scale(scale);
+        // animation->picture()->translate(shiftX, shiftY);
 
         updated = true;
     }
@@ -313,12 +374,12 @@ private:
     {
         errorMsg = NoError;
 
-        if (Initializer::init(0) != Result::Success) {
+        if (Initializer::init(0, CanvasEngine::Wg) != Result::Success) {
             errorMsg = "init() fail";
             return;
         }
 
-        canvas = SwCanvas::gen();
+        canvas = WgCanvas::gen();
         if (!canvas) errorMsg = "Invalid canvas";
 
         animation = Animation::gen();
@@ -326,8 +387,12 @@ private:
     }
 
 private:
+    WGPUInstance instance{};
+    WGPUSurface surface{};
+
     string                 errorMsg;
-    unique_ptr<SwCanvas>   canvas = nullptr;
+    string                 selector;
+    unique_ptr<WgCanvas>   canvas = nullptr;
     unique_ptr<Animation>  animation = nullptr;
     string                 data;
     uint8_t*               buffer = nullptr;

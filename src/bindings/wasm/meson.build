@@ -1,10 +1,5 @@
 if (cc.get_id() == 'emscripten')
-
-    if get_option('bindings').contains('wasm_beta') == true
-        source_file = files('tvgWgWasmLottieAnimation.cpp')
-    else
-        source_file = files('tvgWasmLottieAnimation.cpp')
-    endif
+    source_file = files('tvgWasmLottieAnimation.cpp')
 
     thorvg_wasm_dep = declare_dependency(include_directories
                                          : include_directories('.'), sources

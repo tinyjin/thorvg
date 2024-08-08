@@ -6,9 +6,9 @@ strip = 'strip'
 
 [built-in options]
 c_args        = []
-c_link_args   = ['-lembind', '-sMODULARIZE=1', '-sUSE_WEBGPU=1', '-sASYNCIFY=1', '-sFORCE_FILESYSTEM=1']
+c_link_args   = ['-lembind', '-sMODULARIZE=1', '-sUSE_WEBGPU=1', '-sASYNCIFY=1', '-sFORCE_FILESYSTEM=1', '-sALLOW_MEMORY_GROWTH=1']
 cpp_args      = []
-cpp_link_args = ['-lembind', '-sMODULARIZE=1', '-sUSE_WEBGPU=1', '-sASYNCIFY=1', '-sFORCE_FILESYSTEM=1']
+cpp_link_args = ['-lembind', '-sMODULARIZE=1', '-sUSE_WEBGPU=1', '-sASYNCIFY=1', '-sFORCE_FILESYSTEM=1', '-sALLOW_MEMORY_GROWTH=1']
 
 [host_machine]
 system     = 'emscripten'

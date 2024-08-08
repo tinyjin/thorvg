@@ -50,7 +50,7 @@ public:
         WGPUSurfaceDescriptorFromCanvasHTMLSelector canvasDesc{};
         canvasDesc.chain.next = nullptr;
         canvasDesc.chain.sType = WGPUSType_SurfaceDescriptorFromCanvasHTMLSelector;
-        canvasDesc.selector = "#canvasWebgpu";
+        canvasDesc.selector = "#thorvg-canvas";
         WGPUSurfaceDescriptor surfaceDesc{};
         surfaceDesc.nextInChain = &canvasDesc.chain;
         surface = wgpuInstanceCreateSurface(instance, &surfaceDesc);
