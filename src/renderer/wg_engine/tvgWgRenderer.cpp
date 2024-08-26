@@ -316,6 +316,39 @@ bool WgRenderer::target(WGPUInstance instance, WGPUSurface surface, uint32_t w, 
     return true;
 }
 
+// target for native window handle
+bool WgRenderer::target(WGPUInstance instance, WGPUSurface surface, WGPUAdapter adapter, WGPUDevice device, uint32_t w, uint32_t h)
+{
+    // store target surface properties
+    mTargetSurface.stride = w;
+    mTargetSurface.w = w > 0 ? w : 1;
+    mTargetSurface.h = h > 0 ? h : 1;
+    
+    mContext.initialize(instance, surface, adapter, device);
+
+    WGPUSurfaceConfiguration surfaceConfiguration {
+        .device = mContext.device,
+        .format = WGPUTextureFormat_BGRA8Unorm,
+        .usage = WGPUTextureUsage_CopyDst,
+        .width = w, .height = h,
+        #ifdef __EMSCRIPTEN__
+        .presentMode = WGPUPresentMode_Fifo,
+        #else
+        .presentMode = WGPUPresentMode_Immediate
+        #endif
+    };
+    wgpuSurfaceConfigure(surface, &surfaceConfiguration);
+    initialize();
+    mRenderStoragePool.initialize(mContext, w, h);
+    mStorageRoot.initialize(mContext, w, h);
+    mCompositor.initialize(mContext, w, h);
+    // screen buffer
+    mTexScreen = mContext.createTexStorage(w, h, WGPUTextureFormat_BGRA8Unorm);
+    mTexViewScreen = mContext.createTextureView(mTexScreen);
+    mBindGroupScreen = mContext.pipelines->layouts.createBindGroupScreen1WO(mTexViewScreen);
+    return true;
+}
+
 
 Compositor* WgRenderer::target(TVG_UNUSED const RenderRegion& region, TVG_UNUSED ColorSpace cs)
 {

@@ -22,22 +22,28 @@
 
 #include <thorvg.h>
 #include <emscripten/bind.h>
+#include <emscripten.h>
 #include "tvgPicture.h"
 #ifdef THORVG_WG_RASTER_SUPPORT
     #include <webgpu/webgpu.h>
 #endif
+#include <iostream>
 
 using namespace emscripten;
 using namespace std;
 using namespace tvg;
 
 static const char* NoError = "None";
+static WGPUInstance instance{};
+static WGPUAdapter adapter{};
+static WGPUDevice device{};
 
 struct TvgEngineMethod
 {
     virtual ~TvgEngineMethod() {}
     virtual unique_ptr<Canvas> init(string&) = 0;
     virtual void resize(Canvas* canvas, int w, int h) = 0;
+    virtual void wgpuInit() {};
     virtual val output(int w, int h)
     {
         return val(typed_memory_view<uint8_t>(0, nullptr));
@@ -52,6 +58,9 @@ struct TvgSwEngine : TvgEngineMethod
     {
         free(buffer);
         Initializer::term(tvg::CanvasEngine::Sw);
+    }
+
+    void wgpuInit() override {
     }
 
     unique_ptr<Canvas> init(string&) override
@@ -77,7 +86,6 @@ struct TvgSwEngine : TvgEngineMethod
 struct TvgWgEngine : TvgEngineMethod
 {
     #ifdef THORVG_WG_RASTER_SUPPORT
-        WGPUInstance instance{};
         WGPUSurface surface{};
     #endif
 
@@ -85,17 +93,71 @@ struct TvgWgEngine : TvgEngineMethod
     {
         #ifdef THORVG_WG_RASTER_SUPPORT
             wgpuSurfaceRelease(surface);
-            wgpuInstanceRelease(instance);
+            // wgpuInstanceRelease(instance);
         #endif
         Initializer::term(tvg::CanvasEngine::Wg);
+    }
+
+    void wgpuInit() override {
+
+    #ifdef THORVG_WG_RASTER_SUPPORT
+      if (!adapter && !device) {
+        EM_ASM({
+          console.log("wgpuInit ");
+        });
+
+        // request adapter
+        const WGPURequestAdapterOptions requestAdapterOptions { .nextInChain = nullptr, .compatibleSurface = this->surface, .powerPreference = WGPUPowerPreference_HighPerformance, .forceFallbackAdapter = false };
+        auto onAdapterRequestEnded = [](WGPURequestAdapterStatus status, WGPUAdapter adapter, char const * message, void * pUserData) { *((WGPUAdapter*)pUserData) = adapter; };
+        wgpuInstanceRequestAdapter(instance, &requestAdapterOptions, onAdapterRequestEnded, &adapter);
+        #ifdef __EMSCRIPTEN__
+        while (!adapter) emscripten_sleep(10);
+        #endif
+        assert(adapter);
+
+        EM_ASM({
+          console.log("adapter ");
+        });
+
+        // get adapter and surface properties
+        WGPUFeatureName featureNames[32]{};
+        size_t featuresCount = wgpuAdapterEnumerateFeatures(adapter, featureNames);
+
+        // request device
+        const WGPUDeviceDescriptor deviceDesc { .nextInChain = nullptr, .label = "The device", .requiredFeatureCount = featuresCount, .requiredFeatures = featureNames };
+        auto onDeviceRequestEnded = [](WGPURequestDeviceStatus status, WGPUDevice device, char const * message, void * pUserData) { *((WGPUDevice*)pUserData) = device; };
+        wgpuAdapterRequestDevice(adapter, &deviceDesc, onDeviceRequestEnded, &device);
+        #ifdef __EMSCRIPTEN__
+        while (!device) emscripten_sleep(10);
+        #endif
+        assert(device);
+
+        EM_ASM({
+          console.log("device ");
+        });
+
+        // device uncaptured error callback
+        auto onDeviceError = [](WGPUErrorType type, char const* message, void* pUserData) { std::cout << message << std::endl; };
+        wgpuDeviceSetUncapturedErrorCallback(device, onDeviceError, nullptr);
+
+        EM_ASM({
+          console.log("end ");
+        });
+      }
+    #endif
     }
 
     unique_ptr<Canvas> init(string& selector) override
     {
         #ifdef THORVG_WG_RASTER_SUPPORT
             //Init WebGPU
-            instance = wgpuCreateInstance(nullptr);
+            if (!instance) {
+              EM_ASM({
+                console.log("Initializing WebGPU...");
+              });
 
+              instance = wgpuCreateInstance(nullptr);
+            }
             WGPUSurfaceDescriptorFromCanvasHTMLSelector canvasDesc{};
             canvasDesc.chain.next = nullptr;
             canvasDesc.chain.sType = WGPUSType_SurfaceDescriptorFromCanvasHTMLSelector;
@@ -104,6 +166,7 @@ struct TvgWgEngine : TvgEngineMethod
             WGPUSurfaceDescriptor surfaceDesc{};
             surfaceDesc.nextInChain = &canvasDesc.chain;
             surface = wgpuInstanceCreateSurface(instance, &surfaceDesc);
+
         #endif
 
         Initializer::init(0, tvg::CanvasEngine::Wg);
@@ -112,7 +175,11 @@ struct TvgWgEngine : TvgEngineMethod
 
     void resize(Canvas* canvas, int w, int h) override
     {
-        static_cast<WgCanvas*>(canvas)->target(instance, surface, w, h);
+      EM_ASM({
+        console.log("resize ");
+      });
+
+        static_cast<WgCanvas*>(canvas)->target(instance, surface, adapter, device, w, h);
     }
 };
 
@@ -132,7 +199,7 @@ public:
         if (engine == "sw") this->engine = new TvgSwEngine;
         else if (engine == "wg") this->engine = new TvgWgEngine;
 
-        if (!engine) {
+        if (!this->engine) {
             errorMsg = "Invalid engine";
             return;
         }
@@ -146,6 +213,10 @@ public:
 
         animation = Animation::gen();
         if (!animation) errorMsg = "Invalid animation";
+    }
+
+    void wgpuInit() {
+      this->engine->wgpuInit();
     }
 
     string error()
@@ -180,6 +251,10 @@ public:
     // Render methods
     bool load(string data, string mimetype, int width, int height, string rpath = "")
     {
+        EM_ASM({
+          console.log("load ");
+        });
+
         errorMsg = NoError;
 
         if (!canvas) return false;
@@ -436,6 +511,7 @@ EMSCRIPTEN_BINDINGS(thorvg_bindings)
         .function("load", &TvgLottieAnimation ::load)
         .function("update", &TvgLottieAnimation ::update)
         .function("frame", &TvgLottieAnimation ::frame)
+        .function("wgpuInit", &TvgLottieAnimation ::wgpuInit, async())
         .function("viewport", &TvgLottieAnimation ::viewport)
         .function("resize", &TvgLottieAnimation ::resize)
         .function("save", &TvgLottieAnimation ::save);

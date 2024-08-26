@@ -79,6 +79,37 @@ void WgContext::initialize(WGPUInstance instance, WGPUSurface surface)
     assert(samplerLinearClamp);
 }
 
+void WgContext::initialize(WGPUInstance instance, WGPUSurface surface, WGPUAdapter adapter, WGPUDevice device)
+{
+    assert(instance);
+    assert(surface);
+    assert(adapter);
+    assert(device);
+    
+    // store global instance and surface
+    this->instance = instance;
+    this->surface = surface;
+    this->adapter = adapter;
+    this->device = device;
+
+    preferredFormat = wgpuSurfaceGetPreferredFormat(surface, adapter);
+
+    // get current queue
+    queue = wgpuDeviceGetQueue(device);
+    assert(queue);
+
+    // create shared webgpu assets
+    allocateBufferIndexFan(32768);
+    samplerNearestRepeat = createSampler(WGPUFilterMode_Nearest, WGPUMipmapFilterMode_Nearest, WGPUAddressMode_Repeat);
+    samplerLinearRepeat = createSampler(WGPUFilterMode_Linear, WGPUMipmapFilterMode_Linear, WGPUAddressMode_Repeat);
+    samplerLinearMirror = createSampler(WGPUFilterMode_Linear, WGPUMipmapFilterMode_Linear, WGPUAddressMode_MirrorRepeat);
+    samplerLinearClamp = createSampler(WGPUFilterMode_Linear, WGPUMipmapFilterMode_Linear, WGPUAddressMode_ClampToEdge);
+    assert(samplerNearestRepeat);
+    assert(samplerLinearRepeat);
+    assert(samplerLinearMirror);
+    assert(samplerLinearClamp);
+}
+
 
 void WgContext::release()
 {

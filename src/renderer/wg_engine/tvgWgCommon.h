@@ -50,6 +50,7 @@ struct WgContext {
     WGPUSampler samplerLinearClamp{};
 
     void initialize(WGPUInstance instance, WGPUSurface surface);
+    void initialize(WGPUInstance instance, WGPUSurface surface, WGPUAdapter adapter, WGPUDevice device);
     void release();
     
     // create common objects

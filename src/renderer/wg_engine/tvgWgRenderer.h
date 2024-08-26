@@ -46,6 +46,7 @@ public:
     bool sync() override;
 
     bool target(WGPUInstance instance, WGPUSurface surface, uint32_t w, uint32_t h);
+    bool target(WGPUInstance instance, WGPUSurface surface, WGPUAdapter adapter, WGPUDevice device, uint32_t w, uint32_t h);
 
     Compositor* target(const RenderRegion& region, ColorSpace cs) override;
     bool beginComposite(Compositor* cmp, CompositeMethod method, uint8_t opacity) override;
