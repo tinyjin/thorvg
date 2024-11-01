@@ -648,11 +648,19 @@ struct LottieImage : LottieObject, LottieRenderPooler<tvg::Picture>
     union {
         char* b64Data = nullptr;
         char* path;
-    };
+    }; // need to turn this into a struct(LottieProperty, LottiePath something?)
     char* mimeType = nullptr;
     uint32_t size = 0;
     float width = 0.0f;
     float height = 0.0f;
+
+    // void override(char* prop)
+    // // void override(char* prop) override
+    // {
+    //     this->b64Data = prop;
+    //     // this->b64Data = *static_cast<char*>(prop);
+    //     this->prepare();
+    // }
 
     ~LottieImage();
     void prepare();

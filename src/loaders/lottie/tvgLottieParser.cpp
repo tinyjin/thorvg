@@ -930,13 +930,17 @@ LottieImage* LottieParser::parseImage(const char* data, const char* subPath, boo
     //embedded image resource. should start with "data:"
     //header look like "data:image/png;base64," so need to skip till ','.
     if (embedded && !strncmp(data, "data:", 5)) {
+        cout << "embedded image" << endl;
         //figure out the mimetype
         auto mimeType = data + 11;
         auto needle = strstr(mimeType, ";");
         image->mimeType = strDuplicate(mimeType, needle - mimeType);
         //b64 data
         auto b64Data = strstr(data, ",") + 1;
+        cout << "b64Data: " << b64Data << endl;
         size_t length = strlen(data) - (b64Data - data);
+
+        // FIXME: 여기서 b64decode가 PNG로 나옴
         image->size = b64Decode(b64Data, length, &image->b64Data);
     //external image resource
     } else {
@@ -944,6 +948,8 @@ LottieImage* LottieParser::parseImage(const char* data, const char* subPath, boo
         image->path = static_cast<char*>(malloc(len));
         snprintf(image->path, len, "%s/%s%s", dirName, subPath, data);
     }
+
+    cout << "image->b64Data: " << image->b64Data << endl;
 
     image->width = width;
     image->height = height;
@@ -1472,8 +1478,77 @@ bool LottieParser::apply(LottieSlot* slot)
             break;
         }
         case LottieProperty::Type::Image: {
+            obj = new LottieImage;
             context.parent = obj;
-            obj = parseAsset();
+            
+            unsigned long id = 0;
+
+            //Used for Image Asset
+            const char* data = nullptr;
+            const char* subPath = nullptr;
+            float width = 0.0f;
+            float height = 0.0f;
+            auto embedded = false;
+
+            cout << "get in image!" << endl;
+
+            while (auto key = nextObjectKey()) {
+                cout << "key: " << key << endl;
+
+                if (KEY_AS("id"))
+                {
+                    if (peekType() == kStringType) {
+                        id = djb2Encode(getString());
+                    } else {
+                        id = _int2str(getInt());
+                    }
+                }
+                else if (KEY_AS("layers")) obj = parseLayers(comp->root);
+                else if (KEY_AS("u")) subPath = getString();
+                else if (KEY_AS("p")) data = getString();
+                else if (KEY_AS("w")) width = getFloat();
+                else if (KEY_AS("h")) height = getFloat();
+                else if (KEY_AS("e")) embedded = getInt();
+                else skip(key);
+            }
+            if (data) {
+                cout << "dtect image" << endl;
+                cout << "image data: " << data << endl;
+
+                auto image = static_cast<LottieImage*>(obj);
+
+                //embedded image resource. should start with "data:"
+                //header look like "data:image/png;base64," so need to skip till ','.
+                if (embedded && !strncmp(data, "data:", 5)) {
+                    cout << "embedded image" << endl;
+                    //figure out the mimetype
+                    auto mimeType = data + 11;
+                    auto needle = strstr(mimeType, ";");
+                    image->mimeType = strDuplicate(mimeType, needle - mimeType);
+                    //b64 data
+                    auto b64Data = strstr(data, ",") + 1;
+                    cout << "b64Data: " << b64Data << endl;
+                    size_t length = strlen(data) - (b64Data - data);
+
+                    // FIXME: 여기서 b64decode가 PNG로 나옴
+                    image->size = b64Decode(b64Data, length, &image->b64Data);
+                //external image resource
+                } else {
+                    auto len = strlen(dirName) + strlen(subPath) + strlen(data) + 2;
+                    image->path = static_cast<char*>(malloc(len));
+                    snprintf(image->path, len, "%s/%s%s", dirName, subPath, data);
+                }
+
+                cout << "image->b64Data: " << image->b64Data << endl;
+
+                image->width = width;
+                image->height = height;
+                // image->prepare();
+
+                // obj = parseImage(data, subPath, embedded, width, height);
+            }
+            if (obj) obj->id = id;
+
             break;
         }
         default: break;
@@ -1481,6 +1556,7 @@ bool LottieParser::apply(LottieSlot* slot)
 
     if (!obj || Invalid()) return false;
 
+    cout << "assign obj" << endl;
     slot->assign(obj);
 
     delete(obj);

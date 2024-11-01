@@ -25,6 +25,7 @@
 #include "tvgFill.h"
 #include "tvgTaskScheduler.h"
 #include "tvgLottieModel.h"
+#include "iostream"
 
 
 /************************************************************************/
@@ -103,6 +104,34 @@ void LottieSlot::assign(LottieObject* target)
                 pair->obj->override(&static_cast<LottieText*>(target)->doc);
                 break;
             }
+            case LottieProperty::Type::Image: {
+                cout << "LottieSlot::assign() image" << endl;
+                if (!overridden) {
+                  // for reverting
+                    // pair->prop = new LottieTextDoc;
+                    // *static_cast<LottieTextDoc*>(pair->prop) = static_cast<LottieText*>(pair->obj)->doc;
+                }
+
+                // Need to replace with override function
+                
+                static_cast<LottieImage*>(pair->obj)->b64Data = (static_cast<LottieImage*>(target)->b64Data);
+                // static_cast<LottieImage*>(pair->obj)->b64Data = static_cast<LottieImage*>(target)->b64Data;
+                static_cast<LottieImage*>(pair->obj)->mimeType = (static_cast<LottieImage*>(target)->mimeType);
+                static_cast<LottieImage*>(pair->obj)->size = static_cast<LottieImage*>(target)->size;
+                static_cast<LottieImage*>(pair->obj)->width = static_cast<LottieImage*>(target)->width;
+                static_cast<LottieImage*>(pair->obj)->height = static_cast<LottieImage*>(target)->height;
+                static_cast<LottieImage*>(pair->obj)->prepare();
+
+
+                // *(pair->obj) = &target;
+                // static_cast<LottieImage*>(pair->obj)->b64Data = static_cast<LottieImage*>(target)->b64Data;
+                // static_cast<LottieImage*>(pair->obj)->prepare();
+                // this->b64Data = *static_cast<char*>(prop);
+                
+
+                // pair->obj->override(&static_cast<LottieImage*>(target)->b64Data);
+                break;
+            }
             default: break;
         }
     }
@@ -144,7 +173,11 @@ void LottieImage::prepare()
     //force to load a picture on the same thread
     TaskScheduler::async(false);
 
-    if (size > 0) picture->load((const char*)b64Data, size, mimeType);
+    if (size > 0) {
+        cout << "LottieImage::prepare() b64data: " << b64Data << endl;
+        auto result = picture->load((const char*)b64Data, size, mimeType);
+        cout << "result: " << (int)result << endl;
+    }
     else picture->load(path);
 
     TaskScheduler::async(true);

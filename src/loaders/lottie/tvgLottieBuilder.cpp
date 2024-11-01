@@ -28,6 +28,7 @@
 #include "tvgLottieModel.h"
 #include "tvgLottieBuilder.h"
 #include "tvgLottieExpressions.h"
+#include "iostream"
 
 
 /************************************************************************/
@@ -977,8 +978,14 @@ void LottieBuilder::updateSolid(LottieLayer* layer)
 
 void LottieBuilder::updateImage(LottieGroup* layer)
 {
-    auto image = static_cast<LottieImage*>(layer->children.first());
-    layer->scene->push(tvg::cast(image->pooling(true)));
+    // cout << "updateImage with count: " << layer->children.count << endl;
+
+    for (auto image = layer->children.begin(); image < layer->children.end(); ++image) {
+        layer->scene->push(tvg::cast(static_cast<LottieImage*>(*image)->pooling(true)));
+        // pooling에서 무슨일이 일어나는가?
+    }
+    // cout << "image->b64Data: " << static_cast<LottieImage*>(*image)->b64Data << endl;
+    // layer->scene->push(tvg::cast(image->pooling(true)));
 }
 
 
@@ -1260,6 +1267,7 @@ void LottieBuilder::updateLayer(LottieComposition* comp, Scene* scene, LottieLay
             break;
         }
         case LottieLayer::Image: {
+            // cout << "updateImage" << endl;
             updateImage(layer);
             break;
         }
