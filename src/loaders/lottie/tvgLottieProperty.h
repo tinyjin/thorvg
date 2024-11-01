@@ -112,7 +112,7 @@ struct LottieVectorFrame
 //Property would have an either keyframes or single value.
 struct LottieProperty
 {
-    enum class Type : uint8_t { Point = 0, Float, Opacity, Color, PathSet, ColorStop, Position, TextDoc, Invalid };
+    enum class Type : uint8_t { Point = 0, Float, Opacity, Color, PathSet, ColorStop, Position, TextDoc, Image, Invalid };
 
     LottieExpression* exp = nullptr;
     Type type;

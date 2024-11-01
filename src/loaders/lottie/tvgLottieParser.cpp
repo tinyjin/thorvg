@@ -25,7 +25,7 @@
 #include "tvgLottieModel.h"
 #include "tvgLottieParser.h"
 #include "tvgLottieExpressions.h"
-
+#include "iostream"
 
 /************************************************************************/
 /* Internal Class Implementation                                        */
@@ -959,6 +959,7 @@ LottieObject* LottieParser::parseAsset()
 
     LottieObject* obj = nullptr;
     unsigned long id = 0;
+    char* sid = nullptr;
 
     //Used for Image Asset
     const char* data = nullptr;
@@ -982,9 +983,26 @@ LottieObject* LottieParser::parseAsset()
         else if (KEY_AS("w")) width = getFloat();
         else if (KEY_AS("h")) height = getFloat();
         else if (KEY_AS("e")) embedded = getInt();
+        else if (KEY_AS("sid")) sid = getStringCopy();
         else skip(key);
     }
-    if (data) obj = parseImage(data, subPath, embedded, width, height);
+    if (data) {
+        obj = parseImage(data, subPath, embedded, width, height);
+        if (sid) {
+            cout << "slot type: " << (int)LottieProperty::Type::Image << endl;
+            cout << "sid: " << sid << endl;
+
+            //append object if the slot already exists.
+            //FIXME: duplicated code
+            for (auto slot = comp->slots.begin(); slot < comp->slots.end(); ++slot) {
+                if (strcmp((*slot)->sid, sid)) continue;
+                (*slot)->pairs.push({obj});
+                break;
+            }
+
+            comp->slots.push(new LottieSlot(sid, obj, LottieProperty::Type::Image));
+        }
+    }
     if (obj) obj->id = id;
     return obj;
 }
@@ -1451,6 +1469,11 @@ bool LottieParser::apply(LottieSlot* slot)
             obj = new LottieText;
             context.parent = obj;
             parseSlotProperty<LottieProperty::Type::TextDoc>(static_cast<LottieText*>(obj)->doc);
+            break;
+        }
+        case LottieProperty::Type::Image: {
+            context.parent = obj;
+            obj = parseAsset();
             break;
         }
         default: break;
