@@ -1530,7 +1530,6 @@ bool LottieParser::apply(LottieSlot* slot)
                     cout << "b64Data: " << b64Data << endl;
                     size_t length = strlen(data) - (b64Data - data);
 
-                    // FIXME: 여기서 b64decode가 PNG로 나옴
                     image->size = b64Decode(b64Data, length, &image->b64Data);
                 //external image resource
                 } else {

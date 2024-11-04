@@ -115,7 +115,6 @@ void LottieSlot::assign(LottieObject* target)
                 // Need to replace with override function
                 
                 static_cast<LottieImage*>(pair->obj)->b64Data = (static_cast<LottieImage*>(target)->b64Data);
-                // static_cast<LottieImage*>(pair->obj)->b64Data = static_cast<LottieImage*>(target)->b64Data;
                 static_cast<LottieImage*>(pair->obj)->mimeType = (static_cast<LottieImage*>(target)->mimeType);
                 static_cast<LottieImage*>(pair->obj)->size = static_cast<LottieImage*>(target)->size;
                 static_cast<LottieImage*>(pair->obj)->width = static_cast<LottieImage*>(target)->width;
@@ -184,6 +183,8 @@ void LottieImage::prepare()
 
     picture->size(width, height);
     PP(picture)->ref();
+
+    pooler.clear();
 
     pooler.push(picture);
 }
