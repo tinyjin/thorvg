@@ -98,6 +98,7 @@ private:
     LottieMarker* parseMarker();
 
     bool parseEffect(LottieEffect* effect, void(LottieParser::*func)(LottieEffect*, int));
+    void parseEffectValue(LottieEffect* effect, void(LottieParser::*func)(LottieEffect*, int), int idx);
     void parseCustom(LottieEffect* effect, int idx);
     void parseStroke(LottieEffect* effect, int idx);
     void parseTritone(LottieEffect* effect, int idx);

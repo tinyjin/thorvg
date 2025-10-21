@@ -1305,17 +1305,8 @@ bool LottieParser::parseEffect(LottieEffect* effect, void(LottieParser::*func)(L
             if (custom && KEY_AS("ty")) property = static_cast<LottieFxCustom*>(effect)->property(getInt());
             else if (KEY_AS("v"))
             {
-                if (peekType() == kObjectType) {
-                    enterObject();
-                    while (auto key = nextObjectKey()) {
-                        if (KEY_AS("k")) (this->*func)(effect, idx++);
-                        else if (KEY_AS("sid")) {
-                            cout << "parseEffect: sid: " << getString() << endl;
-                            // TODO: register slot
-                        }
-                        else skip();
-                    }
-                } else (this->*func)(effect, idx++);
+                if (peekType() == kObjectType) parseEffectValue(effect, func, idx++);
+                else (this->*func)(effect, idx++);
             }
             else if (property && KEY_AS("nm")) property->nm = djb2Encode(getString());
             else if (property && KEY_AS("mn")) property->mn = djb2Encode(getString());
