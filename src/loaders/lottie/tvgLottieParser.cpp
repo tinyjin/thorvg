@@ -25,6 +25,7 @@
 #include "tvgLottieModel.h"
 #include "tvgLottieParser.h"
 #include "tvgLottieExpressions.h"
+#include <iostream>
 
 
 /************************************************************************/
@@ -1308,6 +1309,10 @@ bool LottieParser::parseEffect(LottieEffect* effect, void(LottieParser::*func)(L
                     enterObject();
                     while (auto key = nextObjectKey()) {
                         if (KEY_AS("k")) (this->*func)(effect, idx++);
+                        else if (KEY_AS("sid")) {
+                            cout << "parseEffect: sid: " << getString() << endl;
+                            // TODO: register slot
+                        }
                         else skip();
                     }
                 } else (this->*func)(effect, idx++);
