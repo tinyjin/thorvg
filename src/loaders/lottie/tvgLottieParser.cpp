@@ -465,7 +465,7 @@ void LottieParser::parsePropertyInternal(T& prop)
 }
 
 
-void LottieParser::registerSlot(LottieObject* obj, const char* sid, LottieProperty::Type type)
+void LottieParser::registerSlot(LottieObject* obj, const char* sid, LottieProperty::Type type, uint8_t ix)
 {
     auto val = djb2Encode(sid);
 
@@ -475,7 +475,7 @@ void LottieParser::registerSlot(LottieObject* obj, const char* sid, LottieProper
         (*p)->pairs.push({obj});
         return;
     }
-    comp->slots.push(new LottieSlot(context.layer, context.parent, val, obj, type));
+    comp->slots.push(new LottieSlot(context.layer, context.parent, val, obj, type, ix));
 }
 
 
@@ -1303,9 +1303,18 @@ bool LottieParser::parseEffect(LottieEffect* effect, void(LottieParser::*func)(L
         enterObject();
         while (auto key = nextObjectKey()) {
             if (custom && KEY_AS("ty")) property = static_cast<LottieFxCustom*>(effect)->property(getInt());
+            else if (KEY_AS("ix")) property->property->ix = getInt();
             else if (KEY_AS("v"))
             {
-                if (peekType() == kObjectType) parseEffectValue(effect, func, idx++);
+                if (peekType() == kObjectType) {
+                    LottieProperty::Type type = LottieProperty::Type::Invalid;
+                    enterObject();
+                    while (auto key = nextObjectKey()) {
+                        if (KEY_AS("k")) type = (this->*func)(effect, idx);
+                        else if (KEY_AS("sid") && type != LottieProperty::Type::Invalid) registerSlot(effect, getString(), type, property->property->ix);
+                        else skip();
+                    }
+                }
                 else (this->*func)(effect, idx++);
             }
             else if (property && KEY_AS("nm")) property->nm = djb2Encode(getString());
@@ -1633,6 +1642,7 @@ LottieProperty* LottieParser::parse(LottieSlot* slot)
         }
         default: break;
     }
+    prop->ix = slot->ix;
     return prop;
 }
 

@@ -206,10 +206,11 @@ void LottieSlot::apply(LottieProperty* prop, bool byDefault)
 {
     auto copy = !overridden && !byDefault;
 
+    cout << "LottieSlot::apply: sid: " << sid << ", type: " << static_cast<int>(type) << ", ix: " << unsigned(prop->ix) << endl;
     //apply slot object to all targets
     ARRAY_FOREACH(pair, pairs) {
         //backup the original properties before overwriting
-        if (copy) pair->prop = pair->obj->backup(type);
+        if (copy) pair->prop = pair->obj->backup(prop);
         pair->obj->override(prop, !copy);
     }
 
