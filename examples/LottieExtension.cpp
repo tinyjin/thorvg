@@ -19,7 +19,7 @@
 
 #include <thorvg_lottie.h>
 #include "Example.h"
-
+#include "iostream"
 /************************************************************************/
 /* ThorVG Drawing Contents                                              */
 /************************************************************************/
@@ -260,7 +260,8 @@ struct UserExample : tvgexam::Example
 
             const char* slotJson = R"({"slider_control":{"p":{"a":1,"k":[{"i":{"x":[0.833],"y":[0.833]},"o":{"x":[0.167],"y":[0.167]},"t":0,"s":[0],"e":[50]},{"t":100}]}}})";
             auto slotId = slot->gen(slotJson);
-            if (!tvgexam::verify(slot->apply(slotId))) return false;
+            cout << "slotId: " << slotId << endl;
+            // if (!tvgexam::verify(slot->apply(slotId))) return false;
 
             sizing(picture, 12);
             canvas->push(picture);

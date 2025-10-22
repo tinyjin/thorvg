@@ -20,7 +20,9 @@
  * SOFTWARE.
  */
 
+#include <thorvg_lottie.h>
 #include "Example.h"
+#include "iostream"
 
 /************************************************************************/
 /* ThorVG Drawing Contents                                              */
@@ -28,7 +30,7 @@
 
 struct UserExample : tvgexam::Example
 {
-    unique_ptr<tvg::Animation> animation;
+    unique_ptr<tvg::LottieAnimation> animation;
 
     bool content(tvg::Canvas* canvas, uint32_t w, uint32_t h) override
     {
@@ -36,7 +38,7 @@ struct UserExample : tvgexam::Example
         tvg::Text::load(EXAMPLE_DIR"/font/Arial.ttf");
 
         //Animation Controller
-        animation = unique_ptr<tvg::Animation>(tvg::Animation::gen());
+        animation = unique_ptr<tvg::LottieAnimation>(tvg::LottieAnimation::gen());
         auto picture = animation->picture();
         picture->origin(0.5f, 0.5f);  //center origin
 
@@ -47,7 +49,13 @@ struct UserExample : tvgexam::Example
 
         canvas->push(shape);
 
-        if (!tvgexam::verify(picture->load(EXAMPLE_DIR"/lottie/sample.json"))) return false;
+        if (!tvgexam::verify(picture->load(EXAMPLE_DIR"/lottie/extensions/slot12.json"))) return false;
+
+        //slot (effect: slider control)
+        const char* slotJson = R"({"slider_control":{"p":{"a":1,"k":[{"i":{"x":[0.833],"y":[0.833]},"o":{"x":[0.167],"y":[0.167]},"t":0,"s":[0],"e":[50]},{"t":100}]}}})";
+        auto slotId = animation->gen(slotJson);
+        std::cout << "slotId: " << slotId << std::endl;
+        if (!tvgexam::verify(animation->apply(slotId))) return false;
 
         //image scaling preserving its aspect ratio
         float w2, h2;
@@ -82,5 +90,5 @@ struct UserExample : tvgexam::Example
 
 int main(int argc, char **argv)
 {
-    return tvgexam::main(new UserExample, argc, argv, false, 1024, 1024, 4, true);
+    return tvgexam::main(new UserExample, argc, argv, false, 1024, 1024, 1, true);
 }
