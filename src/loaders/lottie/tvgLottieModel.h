@@ -112,6 +112,12 @@ struct LottieObject
     {
     }
 
+    virtual LottieProperty* backup(LottieProperty::Type type)
+    {
+        TVGERR("LOTTIE", "Unsupported slot type");
+        return nullptr;
+    }
+
     virtual void override(LottieProperty* prop, bool release)
     {
         TVGERR("LOTTIE", "Unsupported slot type");
@@ -470,6 +476,12 @@ struct LottieText : LottieObject, LottieRenderPooler<tvg::Shape>
         LottieObject::type = LottieObject::Text;
     }
 
+    LottieProperty* backup(LottieProperty::Type type) override
+    {
+        if (type == LottieProperty::Type::TextDoc) return new LottieTextDoc(doc);
+        return nullptr;
+    }
+
     void override(LottieProperty* prop, bool release = false) override
     {
         if (release) doc.release();
@@ -691,6 +703,22 @@ struct LottieTransform : LottieObject
         return nullptr;
     }
 
+    LottieProperty* backup(LottieProperty::Type type) override
+    {
+        switch (type) {
+            case LottieProperty::Type::Float:
+                return new LottieFloat(rotation);
+            case LottieProperty::Type::Scalar:
+                return new LottieScalar(scale);
+            case LottieProperty::Type::Vector:
+                return new LottieVector(position);
+            case LottieProperty::Type::Opacity:
+                return new LottieOpacity(opacity);
+            default:
+                return nullptr;
+        }
+    }
+
     void override(LottieProperty* prop, bool release) override
     {
         switch (prop->type) {
@@ -741,6 +769,18 @@ struct LottieSolid : LottieObject
         if (color.ix == ix) return &color;
         if (opacity.ix == ix) return &opacity;
         return nullptr;
+    }
+
+    LottieProperty* backup(LottieProperty::Type type) override
+    {
+        switch (type) {
+            case LottieProperty::Type::Color:
+                return new LottieColor(color);
+            case LottieProperty::Type::Opacity:
+                return new LottieOpacity(opacity);
+            default:
+                return nullptr;
+        }
     }
 };
 
@@ -822,6 +862,12 @@ struct LottieGradient : LottieObject
         return nullptr;
     }
 
+    LottieProperty* backup(LottieProperty::Type type) override
+    {
+        if (type == LottieProperty::Type::ColorStop) return new LottieColorStop(colorStops);
+        return nullptr;
+    }
+
     void override(LottieProperty* prop, bool release = false) override
     {
         if (release) colorStops.release();
@@ -877,6 +923,12 @@ struct LottieImage : LottieObject, LottieRenderPooler<tvg::Picture>
 {
     LottieBitmap data;
     bool updated = false;
+
+    LottieProperty* backup(LottieProperty::Type type) override
+    {
+        if (type == LottieProperty::Type::Image) return new LottieBitmap(data);
+        return nullptr;
+    }
 
     void override(LottieProperty* prop, bool release = false) override
     {
