@@ -1304,14 +1304,13 @@ bool LottieParser::parseEffect(LottieEffect* effect, void(LottieParser::*func)(L
         while (auto key = nextObjectKey()) {
             if (custom && KEY_AS("ty")) property = static_cast<LottieFxCustom*>(effect)->property(getInt());
             else if (KEY_AS("ix")) property->property->ix = getInt();
-            else if (KEY_AS("v"))
+            else if (property && KEY_AS("v"))
             {
                 if (peekType() == kObjectType) {
-                    LottieProperty::Type type = LottieProperty::Type::Invalid;
                     enterObject();
                     while (auto key = nextObjectKey()) {
-                        if (KEY_AS("k")) type = (this->*func)(effect, idx);
-                        else if (KEY_AS("sid") && type != LottieProperty::Type::Invalid) registerSlot(effect, getString(), type, property->property->ix);
+                        if (KEY_AS("k")) (this->*func)(effect, idx);
+                        else if (KEY_AS("sid")) registerSlot(effect, getString(), property->property->type, property->property->ix);
                         else skip();
                     }
                 }
