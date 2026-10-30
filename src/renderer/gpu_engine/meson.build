@@ -15,3 +15,7 @@ endif
 if wg_engine
     subdir('wg')
 endif
+
+if mtl_engine
+    subdir('mtl')
+endif

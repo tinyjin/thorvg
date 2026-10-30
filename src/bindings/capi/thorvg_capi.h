@@ -718,6 +718,53 @@ TVG_API Tvg_Result tvg_wgcanvas_set_target_with_context(Tvg_Canvas canvas, const
 
 /** \} */   // end defgroup ThorVGCapi_WgCanvas
 
+
+/**
+ * @defgroup ThorVGCapi_MtlCanvas MtlCanvas
+ * @brief A module for rendering the graphical elements using the Metal engine.
+ *
+ * \{
+ */
+
+/************************************************************************/
+/* MtlCanvas API                                                        */
+/************************************************************************/
+
+/**
+ * @brief Creates a new Metal canvas object.
+ *
+ * @param[in] op The rendering engine option.
+ *
+ * @return A new Tvg_Canvas object, or @c NULL if the Metal engine is not supported.
+ *
+ * @note Experimental API
+ */
+TVG_API Tvg_Canvas tvg_mtlcanvas_create(Tvg_Engine_Option op);
+
+
+/**
+ * @brief Sets the drawing target for the rasterization.
+ *
+ * @param[in] canvas The Tvg_Canvas object associated with the Metal engine.
+ * @param[in] device An @c id<MTLDevice> handle.
+ * @param[in] queue An @c id<MTLCommandQueue> handle. If @c NULL, the canvas creates its own queue.
+ * @param[in] target Either a @c CAMetalLayer* or an @c id<MTLTexture>.
+ * @param[in] w The width of the target.
+ * @param[in] h The height of the target.
+ * @param[in] cs Specifies how the pixel values should be interpreted.
+ * @param[in] type @c 0: surface, @c 1: texture are used as presentable target.
+ *
+ * @return Tvg_Result enumeration.
+ * @retval TVG_RESULT_INVALID_ARGUMENT An invalid canvas, size or colorspace combination.
+ * @retval TVG_RESULT_INSUFFICIENT_CONDITION The canvas is performing rendering.
+ * @retval TVG_RESULT_NOT_SUPPORTED The Metal engine is not supported.
+ *
+ * @note Experimental API
+ */
+TVG_API Tvg_Result tvg_mtlcanvas_set_target(Tvg_Canvas canvas, void* device, void* queue, void* target, uint32_t w, uint32_t h, Tvg_Colorspace cs, int type);
+
+/** \} */   // end defgroup ThorVGCapi_MtlCanvas
+
 /************************************************************************/
 /* Common Canvas API                                                    */
 /************************************************************************/

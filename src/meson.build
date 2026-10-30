@@ -63,6 +63,7 @@ thorvg_lib = library(
     dependencies           : thorvg_lib_dep,
     install                : true,
     cpp_args               : compiler_flags,
+    objcpp_args            : mtl_engine ? compiler_flags : [],
     gnu_symbol_visibility  : 'hidden',
     override_options       : override_options
 )

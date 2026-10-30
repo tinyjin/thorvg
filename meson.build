@@ -41,6 +41,15 @@ if all_engines or get_option('engines').contains('wg')
     config_h.set10('THORVG_WG_ENGINE_SUPPORT', true)
 endif
 
+mtl_engine = false
+if get_option('engines').contains('mtl') or (all_engines and host_machine.system() == 'darwin')
+    if host_machine.system() != 'darwin'
+        error('The Metal engine is only available on Apple platforms.')
+    endif
+    mtl_engine = true
+    config_h.set10('THORVG_MTL_ENGINE_SUPPORT', true)
+endif
+
 # Partial Rendering
 if get_option('partial')
   config_h.set10('THORVG_PARTIAL_RENDER_SUPPORT', true)
@@ -194,6 +203,7 @@ summary(
     'CPU': cpu_engine,
     'GL': gl_engine,
     'WebGPU': wg_engine,
+    'Metal': mtl_engine,
   },
   section: 'Raster Engine',
   bool_yn: true,

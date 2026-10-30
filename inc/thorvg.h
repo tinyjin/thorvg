@@ -2646,6 +2646,61 @@ struct TVG_API WgCanvas final : Canvas
 
 
 /**
+ * @class MtlCanvas
+ *
+ * @brief A class for the rendering graphic elements with a Metal raster engine.
+ *
+ * @note Experimental API
+ */
+struct TVG_API MtlCanvas final : Canvas
+{
+    ~MtlCanvas() override;
+
+    /**
+     * @brief Sets the drawing target for the rasterization.
+     *
+     * Canvas::sync() submits the frame to the command queue without waiting for the GPU. A surface target is presented by that submission.
+     * To read a texture target back on the CPU, pass your own @p queue and wait for a command buffer enqueued after Canvas::sync().
+     *
+     * @param[in] device An @c id<MTLDevice> handle. Passing @c nullptr detaches the canvas from its GPU resources.
+     * @param[in] queue An @c id<MTLCommandQueue> handle. If @c nullptr, the canvas creates its own queue.
+     * @param[in] target Either a @c CAMetalLayer* or an @c id<MTLTexture>, serving as a presentable surface or a texture. A texture needs @c MTLTextureUsageRenderTarget.
+     * @param[in] w The width of the target.
+     * @param[in] h The height of the target.
+     * @param[in] cs Specifies how the pixel values should be interpreted. Currently, it allows @c ColorSpace::ABGR8888, @c ColorSpace::ABGR8888S, and @c ColorSpace::XBGR8888.
+     * @param[in] type @c 0: surface, @c 1: texture are used as presentable target.
+     *
+     * @retval Result::InsufficientCondition if the canvas is performing rendering. Please ensure the canvas is synced.
+     * @retval Result::NonSupport In case the metal engine is not supported.
+     *
+     * @note @c ColorSpace::XBGR8888 selects opaque surface composition and ignores output alpha. This format requires @p type to be @c 0.
+     * @note A surface composites premultiplied alpha, so @c ColorSpace::ABGR8888S applies to texture targets only.
+     * @note Experimental API
+     *
+     * @see Canvas::viewport()
+     * @see Canvas::sync()
+     */
+    Result target(void* device, void* queue, void* target, uint32_t w, uint32_t h, ColorSpace cs, int type = 0) noexcept;
+
+    /**
+     * @brief Creates a new Metal Canvas object with optional rendering engine settings.
+     *
+     * @param[in] op The rendering engine option. Default is @c EngineOption::Default.
+     *
+     * @return A new MtlCanvas object, or @c nullptr if the engine is not supported.
+     *
+     * @note Currently, it does not support @c EngineOption::SmartRender. The request will be ignored.
+     * @note Experimental API
+     *
+     * @see enum EngineOption
+     */
+    static MtlCanvas* gen(EngineOption op = EngineOption::Default) noexcept;
+
+    _TVG_PROTECTED_CTOR(MtlCanvas);
+};
+
+
+/**
  * @class Initializer
  *
  * @brief A class that enables initialization and termination of the TVG engines.

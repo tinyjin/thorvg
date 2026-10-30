@@ -568,6 +568,7 @@ The following outlines the dependencies for these optional features:
 * **CPU**: [OpenMP 2.0](https://www.openmp.org/) (optional)
 * **GL/WebGL**: [OpenGL 3.3](https://www.khronos.org/opengl/), [OpenGL ES 3.0](https://www.khronos.org/opengles/), or a browser with [WebGL2](https://www.khronos.org/webgl/) support.
 * **WebGPU**: [wgpu-native v29.0.1.1](https://github.com/gfx-rs/wgpu-native) or a browser with [WebGPU](https://www.w3.org/TR/webgpu/) support.
+* **Metal**: The Metal and QuartzCore frameworks on Apple platforms.
 * **PNG** (external): [libpng](https://github.com/pnggroup/libpng)
 * **JPEG** (external): [libjpeg-turbo](https://github.com/libjpeg-turbo/libjpeg-turbo)
 * **WebP** (external): [libwebp](https://developers.google.com/speed/webp/download)

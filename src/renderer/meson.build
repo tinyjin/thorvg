@@ -4,7 +4,7 @@ if cpu_engine
     subdir('cpu_engine')
 endif
 
-if gl_engine or wg_engine
+if gl_engine or wg_engine or mtl_engine
     subdir('gpu_engine')
 endif
 
