@@ -36,6 +36,10 @@
     #include "tvgWgRenderer.h"
 #endif
 
+#ifdef THORVG_MTL_ENGINE_SUPPORT
+    #include "tvgMtlRenderer.h"
+#endif
+
 
 /************************************************************************/
 /* Canvas Class Implementation                                          */
@@ -272,5 +276,58 @@ WgCanvas* WgCanvas::gen(EngineOption op) noexcept
     }
 #endif
     TVGLOG("RENDERER", "WgCanvas is not supported");
+    return nullptr;
+}
+
+
+/************************************************************************/
+/* MtlCanvas Class Implementation                                       */
+/************************************************************************/
+
+MtlCanvas::MtlCanvas() = default;
+
+MtlCanvas::~MtlCanvas()
+{
+#ifdef THORVG_MTL_ENGINE_SUPPORT
+    static_cast<MtlRenderer*>(pImpl->renderer)->target(nullptr, nullptr, nullptr, 0, 0, ColorSpace::Unknown, 0);
+
+    MtlRenderer::term();
+#endif
+}
+
+Result MtlCanvas::target(void* device, void* queue, void* target, uint32_t w, uint32_t h, ColorSpace cs, int type) noexcept
+{
+#ifdef THORVG_MTL_ENGINE_SUPPORT
+    if (pImpl->status == Status::Updating || pImpl->status == Status::Drawing) return Result::InsufficientCondition;
+
+    auto ret = static_cast<MtlRenderer*>(pImpl->renderer)->target(device, queue, target, w, h, cs, type);
+    if (ret != Result::Success) return ret;
+
+    pImpl->vport = {0, 0, (int32_t)w, (int32_t)h};
+    pImpl->renderer->viewport(pImpl->vport);
+    pImpl->status = Status::Damaged;  // Paints must be updated again with this new target.
+
+    //FIXME: The value must be associated with an individual canvas instance.
+    BitmapLoader::cs = static_cast<ColorSpace>(cs);
+
+    return Result::Success;
+#endif
+    return Result::NonSupport;
+}
+
+MtlCanvas* MtlCanvas::gen(EngineOption op) noexcept
+{
+#ifdef THORVG_MTL_ENGINE_SUPPORT
+    if (engineInit > 0) {
+        if (op & EngineOption::SmartRender) TVGLOG("RENDERER", "MtlCanvas doesn't support Smart Rendering");
+        if (op & EngineOption::Aliased) TVGLOG("RENDERER", "MtlCanvas doesn't support Aliased");
+        auto renderer = MtlRenderer::gen(TaskScheduler::threads(), op);
+        renderer->ref();
+        auto ret = new MtlCanvas;
+        ret->pImpl->renderer = renderer;
+        return ret;
+    }
+#endif
+    TVGLOG("RENDERER", "MtlCanvas is not supported");
     return nullptr;
 }

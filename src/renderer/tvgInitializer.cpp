@@ -37,6 +37,10 @@
     #include "tvgWgRenderer.h"
 #endif
 
+#ifdef THORVG_MTL_ENGINE_SUPPORT
+    #include "tvgMtlRenderer.h"
+#endif
+
 
 /************************************************************************/
 /* Internal Class Implementation                                        */
@@ -115,6 +119,10 @@ Result Initializer::term() noexcept
 
 #ifdef THORVG_WG_ENGINE_SUPPORT
     if (!WgRenderer::term()) return Result::InsufficientCondition;
+#endif
+
+#ifdef THORVG_MTL_ENGINE_SUPPORT
+    if (!MtlRenderer::term()) return Result::InsufficientCondition;
 #endif
 
     TaskScheduler::term();
