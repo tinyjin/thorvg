@@ -2659,6 +2659,85 @@ struct TVG_API WgCanvas final : Canvas
 
 
 /**
+ * @class VkCanvas
+ *
+ * @brief A class for the rendering graphic elements with a Vulkan raster engine.
+ *
+ * @note Experimental API
+ */
+struct TVG_API VkCanvas final : Canvas
+{
+    ~VkCanvas() override;
+
+    /**
+     * @brief Encapsulates the Vulkan objects required for rendering.
+     *
+     * The engine resolves every Vulkan function through @c getInstanceProcAddr, so it never links the Vulkan loader.
+     * The canvas records and submits its work on @c queue. Rendering on a surface additionally requires @c VK_KHR_surface
+     * on the instance, @c VK_KHR_swapchain on the device, and a queue that can present to the surface.
+     *
+     * @note The Vulkan objects must outlive the canvas or stay valid until the canvas is detached from them.
+     * @note Experimental API
+     */
+    struct Context
+    {
+        void* instance;             // VkInstance
+        void* physicalDevice;       // VkPhysicalDevice of the device
+        void* device;               // VkDevice
+        void* queue;                // VkQueue with graphics and compute support
+        uint32_t queueFamilyIndex;  // The queue family index of the queue
+        void* getInstanceProcAddr;  // PFN_vkGetInstanceProcAddr
+    };
+
+    /**
+     * @brief Sets the drawing target for the rasterization.
+     *
+     * Canvas::sync() submits the frame to the queue without waiting for the GPU.
+     * A surface target is presented through a swapchain owned by the canvas.
+     * An image target is left in @c VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL and its contents are visible to any command
+     * submitted to the same queue after Canvas::sync().
+     *
+     * @param[in] context The Vulkan objects. Passing a @c nullptr device detaches the canvas from its GPU resources.
+     * @param[in] target Either a @c VkSurfaceKHR or a @c VkImage handle, serving as a presentable surface or an image.
+     *                   Non-dispatchable Vulkan handles are 64-bit on every platform, so it is passed as an integer.
+     * @param[in] w The width of the target.
+     * @param[in] h The height of the target.
+     * @param[in] cs Specifies how the pixel values should be interpreted. Currently, it allows @c ColorSpace::ABGR8888, @c ColorSpace::ABGR8888S,
+     *               @c ColorSpace::ARGB8888, @c ColorSpace::ARGB8888S, and @c ColorSpace::XBGR8888.
+     * @param[in] type @c 0: surface, @c 1: image are used as presentable target.
+     *
+     * @retval Result::InsufficientCondition if the canvas is performing rendering. Please ensure the canvas is synced.
+     * @retval Result::NonSupport In case the vulkan engine is not supported or the queue can not present to the surface.
+     *
+     * @note An image target must be created with @c VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT and @c VK_IMAGE_USAGE_SAMPLED_BIT in the format
+     *       @c VK_FORMAT_R8G8B8A8_UNORM for @c ColorSpace::ABGR8888 and @c ColorSpace::ABGR8888S, or @c VK_FORMAT_B8G8R8A8_UNORM for @c ColorSpace::ARGB8888 and @c ColorSpace::ARGB8888S.
+     * @note @c ColorSpace::XBGR8888 selects opaque surface composition and ignores output alpha. This format requires @p type to be @c 0.
+     * @note Experimental API
+     *
+     * @see Canvas::viewport()
+     * @see Canvas::sync()
+     */
+    Result target(const Context& context, uint64_t target, uint32_t w, uint32_t h, ColorSpace cs, int type = 0) noexcept;
+
+    /**
+     * @brief Creates a new Vulkan Canvas object with optional rendering engine settings.
+     *
+     * @param[in] op The rendering engine option. Default is @c EngineOption::Default.
+     *
+     * @return A new VkCanvas object, or @c nullptr if the engine is not supported.
+     *
+     * @note Currently, it does not support @c EngineOption::SmartRender. The request will be ignored.
+     * @note Experimental API
+     *
+     * @see enum EngineOption
+     */
+    static VkCanvas* gen(EngineOption op = EngineOption::Default) noexcept;
+
+    _TVG_PROTECTED_CTOR(VkCanvas);
+};
+
+
+/**
  * @class Initializer
  *
  * @brief A class that enables initialization and termination of the TVG engines.

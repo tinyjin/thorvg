@@ -36,6 +36,10 @@
     #include "tvgWgRenderer.h"
 #endif
 
+#ifdef THORVG_VK_ENGINE_SUPPORT
+    #include "tvgVkRenderer.h"
+#endif
+
 
 /************************************************************************/
 /* Canvas Class Implementation                                          */
@@ -272,5 +276,58 @@ WgCanvas* WgCanvas::gen(EngineOption op) noexcept
     }
 #endif
     TVGLOG("RENDERER", "WgCanvas is not supported");
+    return nullptr;
+}
+
+
+/************************************************************************/
+/* VkCanvas Class Implementation                                        */
+/************************************************************************/
+
+VkCanvas::VkCanvas() = default;
+
+VkCanvas::~VkCanvas()
+{
+#ifdef THORVG_VK_ENGINE_SUPPORT
+    static_cast<VkRenderer*>(pImpl->renderer)->target({}, 0, 0, 0, ColorSpace::Unknown);
+
+    VkRenderer::term();
+#endif
+}
+
+Result VkCanvas::target(const Context& context, uint64_t target, uint32_t w, uint32_t h, ColorSpace cs, int type) noexcept
+{
+#ifdef THORVG_VK_ENGINE_SUPPORT
+    if (pImpl->status == Status::Updating || pImpl->status == Status::Drawing) return Result::InsufficientCondition;
+
+    auto ret = static_cast<VkRenderer*>(pImpl->renderer)->target(context, target, w, h, cs, type);
+    if (ret != Result::Success) return ret;
+
+    pImpl->vport = {0, 0, (int32_t)w, (int32_t)h};
+    pImpl->renderer->viewport(pImpl->vport);
+    pImpl->status = Status::Damaged;  // Paints must be updated again with this new target.
+
+    //FIXME: The value must be associated with an individual canvas instance.
+    BitmapLoader::cs = static_cast<ColorSpace>(cs);
+
+    return Result::Success;
+#endif
+    return Result::NonSupport;
+}
+
+VkCanvas* VkCanvas::gen(EngineOption op) noexcept
+{
+#ifdef THORVG_VK_ENGINE_SUPPORT
+    if (engineInit > 0) {
+        if (op & EngineOption::SmartRender) TVGLOG("RENDERER", "VkCanvas doesn't support Smart Rendering");
+        if (op & EngineOption::Aliased) TVGLOG("RENDERER", "VkCanvas doesn't support Aliased");
+        auto renderer = new VkRenderer(TaskScheduler::threads(), op);
+        renderer->ref();
+        auto ret = new VkCanvas;
+        ret->pImpl->renderer = renderer;
+        return ret;
+    }
+#endif
+    TVGLOG("RENDERER", "VkCanvas is not supported");
     return nullptr;
 }

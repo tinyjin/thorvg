@@ -41,6 +41,19 @@ if all_engines or get_option('engines').contains('wg')
     config_h.set10('THORVG_WG_ENGINE_SUPPORT', true)
 endif
 
+# The Vulkan engine needs the headers only, every entry point is resolved at runtime.
+vk_engine = false
+vk_headers = dependency('', required: false)
+if get_option('engines').contains('vk') or (all_engines and host_machine.system() != 'emscripten')
+    vk_headers = dependency('vulkan', required: false)
+    if vk_headers.found() or meson.get_compiler('cpp').has_header('vulkan/vulkan.h')
+        vk_engine = true
+        config_h.set10('THORVG_VK_ENGINE_SUPPORT', true)
+    elif get_option('engines').contains('vk')
+        error('The Vulkan engine requires the Vulkan headers (vulkan/vulkan.h).')
+    endif
+endif
+
 # Partial Rendering
 if get_option('partial')
   config_h.set10('THORVG_PARTIAL_RENDER_SUPPORT', true)
@@ -195,6 +208,7 @@ summary(
     'CPU': cpu_engine,
     'GL': gl_engine,
     'WebGPU': wg_engine,
+    'Vulkan': vk_engine,
   },
   section: 'Render Backend',
   bool_yn: true,
