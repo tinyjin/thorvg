@@ -15,3 +15,7 @@ endif
 if wg_engine
     subdir('wg')
 endif
+
+if vk_engine
+    subdir('vk')
+endif

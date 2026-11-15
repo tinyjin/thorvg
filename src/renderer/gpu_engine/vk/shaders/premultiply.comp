@@ -1,0 +1,18 @@
+#version 450
+
+// Premultiplies straight-alpha pixels while copying them from the staging buffer into the texture.
+layout(local_size_x = 16, local_size_y = 16) in;
+layout(constant_id = 0) const bool BGR = false;
+
+layout(set = 0, binding = 0) readonly buffer Source { uint pixels[]; };
+layout(set = 0, binding = 1, rgba8) writeonly uniform image2D uTarget;
+layout(push_constant) uniform PushBlock { uint width; uint height; uint stride; uint offset; uint row; } pc;
+
+void main()
+{
+    uvec2 id = gl_GlobalInvocationID.xy;
+    if (id.x >= pc.width || id.y >= pc.height) return;
+    vec4 color = unpackUnorm4x8(pixels[pc.offset + id.y * pc.stride + id.x]);
+    if (BGR) color = color.bgra;
+    imageStore(uTarget, ivec2(id.x, id.y + pc.row), vec4(color.rgb * color.a, color.a));
+}

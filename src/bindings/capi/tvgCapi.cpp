@@ -83,6 +83,12 @@ TVG_API Tvg_Canvas tvg_wgcanvas_create(Tvg_Engine_Option op)
 }
 
 
+TVG_API Tvg_Canvas tvg_vkcanvas_create(Tvg_Engine_Option op)
+{
+    return (Tvg_Canvas) VkCanvas::gen(static_cast<EngineOption>(op));
+}
+
+
 TVG_API Tvg_Result tvg_canvas_destroy(Tvg_Canvas canvas)
 {
     if (canvas) {
@@ -118,6 +124,15 @@ TVG_API Tvg_Result tvg_wgcanvas_set_target_with_context(Tvg_Canvas canvas, const
     if (canvas && context) {
         auto ctx = reinterpret_cast<WgCanvas::Context*>(const_cast<Tvg_WgContext*>(context));
         return (Tvg_Result) reinterpret_cast<WgCanvas*>(canvas)->target(*ctx, target, w, h, static_cast<ColorSpace>(cs), type);
+    }
+    return TVG_RESULT_INVALID_ARGUMENT;
+}
+
+TVG_API Tvg_Result tvg_vkcanvas_set_target(Tvg_Canvas canvas, const Tvg_VkContext* context, uint64_t target, uint32_t w, uint32_t h, Tvg_Colorspace cs, int type)
+{
+    if (canvas && context) {
+        auto ctx = reinterpret_cast<const VkCanvas::Context*>(context);
+        return (Tvg_Result) reinterpret_cast<VkCanvas*>(canvas)->target(*ctx, target, w, h, static_cast<ColorSpace>(cs), type);
     }
     return TVG_RESULT_INVALID_ARGUMENT;
 }

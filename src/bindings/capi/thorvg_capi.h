@@ -718,6 +718,69 @@ TVG_API Tvg_Result tvg_wgcanvas_set_target_with_context(Tvg_Canvas canvas, const
 
 /** \} */   // end defgroup ThorVGCapi_WgCanvas
 
+/**
+ * @defgroup ThorVGCapi_VkCanvas VkCanvas
+ * @ingroup ThorVGCapi_Canvas
+ *
+ * @brief A module for rendering the graphical elements using the vulkan engine.
+ *
+ * \{
+ */
+
+/************************************************************************/
+/* VkCanvas API                                                         */
+/************************************************************************/
+
+/**
+ * @brief Encapsulates the Vulkan objects required for rendering.
+ *
+ * The engine resolves every Vulkan function through @c get_instance_proc_addr, so it never links the Vulkan loader.
+ *
+ * @note Experimental API
+ */
+typedef struct {
+        void* instance;               // VkInstance
+        void* physical_device;        // VkPhysicalDevice of the device
+        void* device;                 // VkDevice
+        void* queue;                  // VkQueue with graphics and compute support
+        uint32_t queue_family_index;  // The queue family index of the queue
+        void* get_instance_proc_addr; // PFN_vkGetInstanceProcAddr
+} Tvg_VkContext;
+
+/**
+ * @brief Creates a new Vulkan Canvas object with optional rendering engine settings.
+ *
+ * @param[in] op The rendering engine option.
+ *
+ * @return A new canvas object, or @c NULL if the Vulkan engine is not supported.
+ *
+ * @note Currently, it does not support @c TVG_ENGINE_OPTION_SMART_RENDER. The request will be ignored.
+ * @note Experimental API
+ */
+TVG_API Tvg_Canvas tvg_vkcanvas_create(Tvg_Engine_Option op);
+
+/**
+ * @brief Sets the drawing target for the rasterization.
+ *
+ * @param[in] canvas The Tvg_Canvas object associated with the Vulkan engine.
+ * @param[in] context The Vulkan objects. A @c NULL device detaches the canvas from its GPU resources.
+ * @param[in] target Either a @c VkSurfaceKHR or a @c VkImage handle, serving as a presentable surface or an image.
+ * @param[in] w The width of the target.
+ * @param[in] h The height of the target.
+ * @param[in] cs Specifies how the pixel values should be interpreted. Currently, it allows @c TVG_COLORSPACE_ABGR8888, @c TVG_COLORSPACE_ABGR8888S,
+ *               @c TVG_COLORSPACE_ARGB8888, @c TVG_COLORSPACE_ARGB8888S, and @c TVG_COLORSPACE_XBGR8888.
+ * @param[in] type @c 0: surface, @c 1: image are used as presentable target.
+ *
+ * @retval TVG_RESULT_INSUFFICIENT_CONDITION if the canvas is performing rendering. Please ensure the canvas is synced.
+ * @retval TVG_RESULT_NOT_SUPPORTED In case the vulkan engine is not supported or the queue can not present to the surface.
+ *
+ * @note See tvg::VkCanvas::target() for the requirements of the target.
+ * @note Experimental API
+ */
+TVG_API Tvg_Result tvg_vkcanvas_set_target(Tvg_Canvas canvas, const Tvg_VkContext* context, uint64_t target, uint32_t w, uint32_t h, Tvg_Colorspace cs, int type);
+
+/** \} */   // end defgroup ThorVGCapi_VkCanvas
+
 /************************************************************************/
 /* Common Canvas API                                                    */
 /************************************************************************/

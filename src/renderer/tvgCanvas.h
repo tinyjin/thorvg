@@ -60,6 +60,7 @@ struct Canvas::Impl
             TVGLOG("RENDERER", "add() was called during drawing.");
             return Result::InsufficientCondition;
         }
+        if (status == Status::Damaged) PAINT(scene)->mark(RenderUpdateFlag::All);
         status = Status::Painting;
         return scene->add(target, at);
     }
@@ -70,6 +71,7 @@ struct Canvas::Impl
             TVGLOG("RENDERER", "remove() was called during drawing.");
             return Result::InsufficientCondition;
         }
+        if (status == Status::Damaged) PAINT(scene)->mark(RenderUpdateFlag::All);
         status = Status::Painting;
         return scene->remove(paint);
     }
