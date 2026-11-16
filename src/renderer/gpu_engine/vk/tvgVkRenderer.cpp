@@ -419,20 +419,24 @@ RenderData VkRenderer::prepare(const RenderShape& rshape, RenderData data, const
 
     // shape
     if (shape->shape.setting.valid) {
-        auto lost = shape->shape.setting.ramp == UINT32_MAX;
-        if (rshape.fill && (lost || (flags & (RenderUpdateFlag::Gradient | RenderUpdateFlag::Transform)))) {
-            shape->shape.setting.update(mContext, rshape.fill, &transform, lost || (flags & RenderUpdateFlag::Gradient));
-        } else if (flags & (RenderUpdateFlag::Color | RenderUpdateFlag::Gradient)) {
+        if (rshape.fill) {
+            auto lost = shape->shape.setting.ramp == UINT32_MAX;
+            if (lost || (flags & (RenderUpdateFlag::Gradient | RenderUpdateFlag::Transform))) {
+                shape->shape.setting.update(mContext, rshape.fill, &transform, lost || (flags & RenderUpdateFlag::Gradient));
+            }
+        } else {
             shape->shape.solid.color = rshape.color;
             shape->shape.setting.fillType = VkRenderSettingsType::Solid;
         }
     }
     // stroke
     if (shape->stroke.setting.valid) {
-        auto lost = shape->stroke.setting.ramp == UINT32_MAX;
-        if (rshape.stroke->fill && (lost || (flags & (RenderUpdateFlag::GradientStroke | RenderUpdateFlag::Transform)))) {
-            shape->stroke.setting.update(mContext, rshape.stroke->fill, nullptr, lost || (flags & RenderUpdateFlag::GradientStroke));
-        } else if (flags & (RenderUpdateFlag::Stroke | RenderUpdateFlag::GradientStroke)) {
+        if (rshape.stroke->fill) {
+            auto lost = shape->stroke.setting.ramp == UINT32_MAX;
+            if (lost || (flags & (RenderUpdateFlag::GradientStroke | RenderUpdateFlag::Transform))) {
+                shape->stroke.setting.update(mContext, rshape.stroke->fill, nullptr, lost || (flags & RenderUpdateFlag::GradientStroke));
+            }
+        } else {
             shape->stroke.solid.color = rshape.stroke->color;
             shape->stroke.setting.fillType = VkRenderSettingsType::Solid;
         }
