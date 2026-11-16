@@ -21,7 +21,7 @@
  */
 
 #include <cstring>
-#include "tvgVkCommon.h"
+#include "tvgVkPipelines.h"
 
 #define VK_STAGING_RING_MIN (1u << 20)
 #define VK_STAGING_SHRINK_FRAMES 120  // a staging buffer mostly unused for this many frames is released
@@ -243,9 +243,6 @@ bool VkContext::initialize(const VkCanvas::Context& ctx)
         }
     }
 
-    VkPipelineCacheCreateInfo cacheInfo{VK_STRUCTURE_TYPE_PIPELINE_CACHE_CREATE_INFO};
-    vkCreatePipelineCache(device, &cacheInfo, nullptr, &pipelineCache);
-
     samplerNearestClamp = createSampler(VK_FILTER_NEAREST, VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE, VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE);
     samplerNearestRepeat = createSampler(VK_FILTER_NEAREST, VK_SAMPLER_ADDRESS_MODE_REPEAT, VK_SAMPLER_ADDRESS_MODE_REPEAT);
     samplerLinearClamp = createSampler(VK_FILTER_LINEAR, VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE, VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE);
@@ -253,58 +250,6 @@ bool VkContext::initialize(const VkCanvas::Context& ctx)
     samplerLinearRepeat = createSampler(VK_FILTER_LINEAR, VK_SAMPLER_ADDRESS_MODE_REPEAT, VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE);
     samplerLinearMirror = createSampler(VK_FILTER_LINEAR, VK_SAMPLER_ADDRESS_MODE_MIRRORED_REPEAT, VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE);
     samplerImage = createSampler(VK_FILTER_LINEAR, VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE, VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE, VK_SAMPLER_MIPMAP_MODE_LINEAR);
-
-    // descriptor set layouts
-    {
-        VkDescriptorSetLayoutBinding bindings[2]{};
-        for (uint32_t i = 0; i < 2; ++i) {
-            bindings[i].binding = i;
-            bindings[i].descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC;
-            bindings[i].descriptorCount = 1;
-            bindings[i].stageFlags = VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT;
-        }
-        VkDescriptorSetLayoutCreateInfo info{VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO};
-        info.bindingCount = 2;
-        info.pBindings = bindings;
-        vkCreateDescriptorSetLayout(device, &info, nullptr, &layoutUniforms);
-    }
-    {
-        VkDescriptorSetLayoutBinding binding{0, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 1, VK_SHADER_STAGE_FRAGMENT_BIT, nullptr};
-        VkDescriptorSetLayoutCreateInfo info{VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO};
-        info.bindingCount = 1;
-        info.pBindings = &binding;
-        vkCreateDescriptorSetLayout(device, &info, nullptr, &layoutTexture);
-    }
-    {
-        VkDescriptorSetLayoutBinding bindings[2]{
-            {0, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1, VK_SHADER_STAGE_COMPUTE_BIT, nullptr},
-            {1, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, 1, VK_SHADER_STAGE_COMPUTE_BIT, nullptr}};
-        VkDescriptorSetLayoutCreateInfo info{VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO};
-        info.bindingCount = 2;
-        info.pBindings = bindings;
-        vkCreateDescriptorSetLayout(device, &info, nullptr, &layoutPrepare);
-    }
-
-    // pipeline layouts
-    {
-        VkDescriptorSetLayout sets[]{layoutUniforms, layoutTexture, layoutTexture};
-        VkPushConstantRange range{VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, 0, 64};
-        VkPipelineLayoutCreateInfo info{VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO};
-        info.setLayoutCount = 3;
-        info.pSetLayouts = sets;
-        info.pushConstantRangeCount = 1;
-        info.pPushConstantRanges = &range;
-        vkCreatePipelineLayout(device, &info, nullptr, &pipelineLayout);
-    }
-    {
-        VkPushConstantRange range{VK_SHADER_STAGE_COMPUTE_BIT, 0, 20};
-        VkPipelineLayoutCreateInfo info{VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO};
-        info.setLayoutCount = 1;
-        info.pSetLayouts = &layoutPrepare;
-        info.pushConstantRangeCount = 1;
-        info.pPushConstantRanges = &range;
-        vkCreatePipelineLayout(device, &info, nullptr, &prepareLayout);
-    }
 
     // frames
     for (auto& frame : frames) {
@@ -328,7 +273,9 @@ bool VkContext::initialize(const VkCanvas::Context& ctx)
         frame.transient = createPool(false, 64);
     }
 
-    if (!depthStencilFormat || !pipelineLayout || !prepareLayout || !frames[VK_MAX_FRAMES - 1].transient) {
+    if (depthStencilFormat) pipelines = VkPipelines::acquire(*this);
+
+    if (!pipelines || !frames[VK_MAX_FRAMES - 1].transient) {
         TVGERR("VK_ENGINE", "Failed to initialize the Vulkan context.");
         release();
         return false;
@@ -356,15 +303,10 @@ void VkContext::release()
     for (auto& p : pools) vkDestroyDescriptorPool(device, p, nullptr);
     pools.clear();
 
-    if (prepareLayout) vkDestroyPipelineLayout(device, prepareLayout, nullptr);
-    if (pipelineLayout) vkDestroyPipelineLayout(device, pipelineLayout, nullptr);
-    if (layoutPrepare) vkDestroyDescriptorSetLayout(device, layoutPrepare, nullptr);
-    if (layoutTexture) vkDestroyDescriptorSetLayout(device, layoutTexture, nullptr);
-    if (layoutUniforms) vkDestroyDescriptorSetLayout(device, layoutUniforms, nullptr);
     for (auto sampler : {samplerNearestClamp, samplerNearestRepeat, samplerLinearClamp, samplerLinearRepeat, samplerLinearMirror, samplerImage}) {
         if (sampler) vkDestroySampler(device, sampler, nullptr);
     }
-    if (pipelineCache) vkDestroyPipelineCache(device, pipelineCache, nullptr);
+    if (pipelines) VkPipelines::release(*this, pipelines);
 
     *this = VkContext();
 }
@@ -734,7 +676,7 @@ void VkContext::updateTexture(VkDescriptorSet set, const VkTexture& texture, VkS
 
 VkDescriptor VkContext::allocateTexture(const VkTexture& texture, VkSampler sampler)
 {
-    auto descriptor = allocate(layoutTexture);
+    auto descriptor = allocate(pipelines->layoutTexture);
     if (descriptor.set) updateTexture(descriptor.set, texture, sampler);
     return descriptor;
 }

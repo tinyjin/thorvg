@@ -62,7 +62,7 @@ static VkDeviceSize _align(VkDeviceSize value, VkDeviceSize alignment)
 void VkCompositor::initialize(VkContext& context, uint32_t width, uint32_t height)
 {
     ctx = &context;
-    pipelines.initialize(context);
+    pipelines = context.pipelines;
     resize(context, width, height);
     meshDataBlit.blitBox();
     meshDataPresent.blitBox();
@@ -82,7 +82,7 @@ void VkCompositor::release(VkContext& context)
     stageBufferSolidColor = {};
     stageBufferPaint = {};
     stageBufferViewMat = {};
-    pipelines.release(context);
+    pipelines = nullptr;
     ctx = nullptr;
 }
 
@@ -147,7 +147,7 @@ void VkCompositor::resetBindings()
     uniformsDirty = true;
     // every statically used push constant must hold a value
     VkPushConstants constants{};
-    ctx->vkCmdPushConstants(commandBuffer, ctx->pipelineLayout, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(constants), &constants);
+    ctx->vkCmdPushConstants(commandBuffer, pipelines->pipelineLayout, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(constants), &constants);
     ctx->vkCmdBindIndexBuffer(commandBuffer, frame, indexBase, VK_INDEX_TYPE_UINT32);
 }
 
@@ -190,7 +190,7 @@ void VkCompositor::bindTexture(uint32_t set, VkDescriptorSet descriptor)
 {
     if (currentSets[set] == descriptor) return;
     currentSets[set] = descriptor;
-    ctx->vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, ctx->pipelineLayout, set, 1, &descriptor, 0, nullptr);
+    ctx->vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, pipelines->pipelineLayout, set, 1, &descriptor, 0, nullptr);
 }
 
 
@@ -210,13 +210,13 @@ void VkCompositor::bindColor(VkDeviceSize offset)
 
 void VkCompositor::pushValue(float value)
 {
-    ctx->vkCmdPushConstants(commandBuffer, ctx->pipelineLayout, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, offsetof(VkPushConstants, value), sizeof(float), &value);
+    ctx->vkCmdPushConstants(commandBuffer, pipelines->pipelineLayout, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, offsetof(VkPushConstants, value), sizeof(float), &value);
 }
 
 
 void VkCompositor::pushParams(const float* params)
 {
-    ctx->vkCmdPushConstants(commandBuffer, ctx->pipelineLayout, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(VkPushConstants::params), params);
+    ctx->vkCmdPushConstants(commandBuffer, pipelines->pipelineLayout, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(VkPushConstants::params), params);
 }
 
 
@@ -231,7 +231,7 @@ void VkCompositor::drawIndexed(uint32_t count, VkDeviceSize offset)
     if (uniformsDirty) {
         auto& uniforms = frames[ctx->frameIndex()].uniforms.set;
         const uint32_t offsets[]{viewOffset, paintOffset};
-        ctx->vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, ctx->pipelineLayout, 0, 1, &uniforms, 2, offsets);
+        ctx->vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, pipelines->pipelineLayout, 0, 1, &uniforms, 2, offsets);
         uniformsDirty = false;
     }
     ctx->vkCmdDrawIndexed(commandBuffer, count, 1, uint32_t(offset / sizeof(uint32_t)), 0, 0);
@@ -331,8 +331,8 @@ void VkCompositor::beginRenderPassMS(VkContext& context, VkCommandBuffer command
     VkClearValue clearValues[3]{};
     clearValues[2].depthStencil = {1.0f, 0};
     VkRenderPassBeginInfo info{VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO};
-    info.renderPass = pipelines.passMS;
-    info.framebuffer = target->getFramebuffer(context, pipelines, getTransientView(context, target->width, target->height), depthStencil);
+    info.renderPass = pipelines->passMS;
+    info.framebuffer = target->getFramebuffer(context, *pipelines, getTransientView(context, target->width, target->height), depthStencil);
     info.renderArea = {{0, 0}, {target->width, target->height}};
     info.clearValueCount = 3;
     info.pClearValues = clearValues;
@@ -347,7 +347,7 @@ void VkCompositor::beginRenderPassMS(VkContext& context, VkCommandBuffer command
         setScissor(0, 0, target->width, target->height);
         setStencilReference(0);
         bindTexture(1, target->previous.bgTexture.set);
-        bind(pipelines.get(context, VkPipe::Restore));
+        bind(pipelines->get(context, VkPipe::Restore));
         drawMeshImage(context, &meshDataBlit);
     }
     bindVertex(0, targetState.transformOffset);
@@ -363,8 +363,8 @@ void VkCompositor::beginRenderPass(VkContext& context, VkCommandBuffer commandBu
 
     VkClearValue clearValue{};
     VkRenderPassBeginInfo info{VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO};
-    info.renderPass = pipelines.passSS[clearBuffer ? 0 : 1];
-    info.framebuffer = target->getFramebufferSS(context, pipelines);
+    info.renderPass = pipelines->passSS[clearBuffer ? 0 : 1];
+    info.framebuffer = target->getFramebufferSS(context, *pipelines);
     info.renderArea = {{0, 0}, {target->width, target->height}};
     info.clearValueCount = 1;
     info.pClearValues = &clearValue;
@@ -417,7 +417,7 @@ bool VkCompositor::flush(VkContext& context)
             frame = VK_NULL_HANDLE;
             return false;
         }
-        if (!f.uniforms.set) f.uniforms = context.allocate(context.layoutUniforms);
+        if (!f.uniforms.set) f.uniforms = context.allocate(pipelines->layoutUniforms);
         VkDescriptorBufferInfo infos[]{{f.buffer.buffer, 0, sizeof(VkShaderTypeMat4x4f)}, {f.buffer.buffer, 0, sizeof(VkShaderTypeVec4f) + sizeof(VkShaderTypeGradSettings)}};
         VkWriteDescriptorSet writes[2]{{VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET}, {VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET}};
         for (uint32_t i = 0; i < 2; ++i) {
@@ -628,7 +628,7 @@ void VkCompositor::renderSolidBatch(const VkSolidBatchRange& range)
     setScissorRegion(range.viewport);
     setStencilReference(0);
     bindView();
-    bind(pipelines.get(*ctx, VkPipe::SolidBatch));
+    bind(pipelines->get(*ctx, VkPipe::SolidBatch));
     bindVertex(1, range.vertexOffset);
     bindColor(range.colorOffset);
     drawIndexed(range.indexCount, range.indexOffset);
@@ -642,7 +642,7 @@ void VkCompositor::renderImageBatch(VkPicture* image, const VkImageBatchRange& r
     bindView();
     bindPaint(image->setting.paintIdx);
     bindTexture(1, image->descriptor);
-    bind(pipelines.get(*ctx, VkPipe::ImageDirect));
+    bind(pipelines->get(*ctx, VkPipe::ImageDirect));
     bindVertex(1, range.vertexOffset);
     bindVertex(2, range.texCoordOffset);
     drawIndexed(range.indexCount, range.indexOffset);
@@ -654,7 +654,7 @@ void VkCompositor::renderStencilBatch(VkContext& context, const Array<VkShape*>&
     setScissorRegion(range.viewport);
     setStencilReference(0);
     bindView();
-    bind(pipelines.get(context, range.fillRule == FillRule::NonZero ? VkPipe::NonZero : VkPipe::EvenOdd));
+    bind(pipelines->get(context, range.fillRule == FillRule::NonZero ? VkPipe::NonZero : VkPipe::EvenOdd));
     bindVertex(1, range.stencil.vertexOffset);
     drawIndexed(range.stencil.indexCount, range.stencil.indexOffset);
 
@@ -662,7 +662,7 @@ void VkCompositor::renderStencilBatch(VkContext& context, const Array<VkShape*>&
 
     // Keep the common all-solid case identical to the original two-draw path.
     if (range.solidOnly) {
-        bind(pipelines.get(context, VkPipe::SolidStencilBatch));
+        bind(pipelines->get(context, VkPipe::SolidStencilBatch));
         bindColor(range.colorOffset);
         drawIndexed(range.cover.indexCount, range.cover.indexOffset);
         return;
@@ -691,11 +691,11 @@ void VkCompositor::renderStencilBatch(VkContext& context, const Array<VkShape*>&
                 bindColor(range.colorOffset);
                 colorsBound = true;
             }
-            bind(pipelines.get(context, VkPipe::SolidStencilBatch));
+            bind(pipelines->get(context, VkPipe::SolidStencilBatch));
         } else {
             bindPaint(settings.paintIdx);
             bindTexture(1, settings.ramps(context));
-            bind(_gradientPipeline(pipelines, context, settings.fillType, false));
+            bind(_gradientPipeline(*pipelines, context, settings.fillType, false));
         }
         drawIndexed(firstIndex - batchFirstIndex, range.cover.indexOffset + batchFirstIndex * sizeof(uint32_t));
     }
@@ -734,7 +734,7 @@ void VkCompositor::composeScene(VkContext& context, VkRenderTarget* src, VkRende
     setStencilReference(0);
     bindTexture(1, src->current.bgTexture.set);
     bindTexture(2, mask->current.bgTexture.set);
-    bind(pipelines.compose(context, cmp->method));
+    bind(pipelines->compose(context, cmp->method));
     bindVertex(3, mesh.toffset + 4 * sizeof(Point));
     drawMeshImage(context, &mesh);
 }
@@ -744,7 +744,7 @@ void VkCompositor::blit(VkContext& context, VkCommandBuffer commandBuffer, VkRen
 {
     this->commandBuffer = commandBuffer;
     VkRenderPassBeginInfo info{VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO};
-    info.renderPass = pipelines.blitPass(context, format, present);
+    info.renderPass = pipelines->blitPass(context, format, present);
     info.framebuffer = dst;
     info.renderArea = {{0, 0}, {width, height}};
     context.vkCmdBeginRenderPass(commandBuffer, &info, VK_SUBPASS_CONTENTS_INLINE);
@@ -755,7 +755,7 @@ void VkCompositor::blit(VkContext& context, VkCommandBuffer commandBuffer, VkRen
     setScissor(0, 0, width, height);
     auto aligned = (turns & 1) ? (height == src->width && width == src->height) : (width == src->width && height == src->height);
     bindTexture(1, aligned ? src->current.bgTexture.set : src->getTextureLinear(context));
-    bind(pipelines.blit(context, format, premultiplied));
+    bind(pipelines->blit(context, format, premultiplied));
     bindVertex(1, meshDataPresent.voffset);
     bindVertex(2, meshDataPresent.toffset + ((4 - turns) % 4) * sizeof(Point));
     drawIndexed(meshDataPresent.ibuffer.count, meshDataPresent.ioffset);
@@ -799,7 +799,7 @@ void VkCompositor::drawShape(VkContext& context, VkShape* rdata)
     // setup stencil rules
     if (!convex) {
         setStencilReference(0);
-        bind(pipelines.get(context, rdata->fillRule == FillRule::NonZero ? VkPipe::NonZero : VkPipe::EvenOdd));
+        bind(pipelines->get(context, rdata->fillRule == FillRule::NonZero ? VkPipe::NonZero : VkPipe::EvenOdd));
         // draw to stencil (first pass)
         drawMesh(context, &rdata->shape.mesh);
     }
@@ -807,12 +807,12 @@ void VkCompositor::drawShape(VkContext& context, VkShape* rdata)
     // setup fill rules
     setStencilReference(0);
     if (settings.fillType == VkRenderSettingsType::Solid) {
-        bind(pipelines.get(context, convex ? VkPipe::SolidConv : VkPipe::Solid));
+        bind(pipelines->get(context, convex ? VkPipe::SolidConv : VkPipe::Solid));
         drawMeshSolid(context, mesh, rdata->shape.solid.colorIdx);
     } else {
         bindPaint(settings.paintIdx);
         bindTexture(1, settings.ramps(context));
-        bind(_gradientPipeline(pipelines, context, settings.fillType, convex));
+        bind(_gradientPipeline(*pipelines, context, settings.fillType, convex));
         drawMesh(context, mesh);
     }
 }
@@ -828,7 +828,7 @@ void VkCompositor::blendShape(VkContext& context, VkShape* rdata, BlendMethod bl
     bindView();
     // setup stencil rules
     setStencilReference(0);
-    bind(pipelines.get(context, rdata->fillRule == FillRule::NonZero ? VkPipe::NonZero : VkPipe::EvenOdd));
+    bind(pipelines->get(context, rdata->fillRule == FillRule::NonZero ? VkPipe::NonZero : VkPipe::EvenOdd));
     // draw to stencil (first pass)
     drawMesh(context, &rdata->shape.mesh);
     // setup fill rules
@@ -839,13 +839,13 @@ void VkCompositor::blendShape(VkContext& context, VkShape* rdata, BlendMethod bl
             bindTexture(1, targetTemp0.current.bgTexture.set);
             bindTexture(2, targetTemp0.current.bgTexture.set);
         }
-        bind(pipelines.blend(context, VkMaterial::Solid, blendMethod));
+        bind(pipelines->blend(context, VkMaterial::Solid, blendMethod));
         drawMeshSolid(context, &rdata->bboxMesh, rdata->shape.solid.colorIdx);
     } else {
         bindPaint(settings.paintIdx);
         bindTexture(1, settings.ramps(context));
         if (copied) bindTexture(2, targetTemp0.current.bgTexture.set);
-        bind(_gradientBlendPipeline(pipelines, context, settings.fillType, blendMethod));
+        bind(_gradientBlendPipeline(*pipelines, context, settings.fillType, blendMethod));
         drawMesh(context, &rdata->bboxMesh);
     }
 }
@@ -859,23 +859,23 @@ void VkCompositor::clipShape(VkContext& context, VkShape* rdata, BlendMethod ble
     bindView();
     // setup stencil rules
     setStencilReference(0);
-    bind(pipelines.get(context, rdata->fillRule == FillRule::NonZero ? VkPipe::NonZero : VkPipe::EvenOdd));
+    bind(pipelines->get(context, rdata->fillRule == FillRule::NonZero ? VkPipe::NonZero : VkPipe::EvenOdd));
     // draw to stencil (first pass)
     drawMesh(context, &rdata->shape.mesh);
     // merge depth and stencil buffer
     setStencilReference(0);
     pushValue(128.0f / 255.0f);
-    bind(pipelines.get(context, VkPipe::MergeDepthStencil));
+    bind(pipelines->get(context, VkPipe::MergeDepthStencil));
     drawMesh(context, &rdata->bboxMesh);
     // setup fill rules
     setStencilReference(0);
     if (settings.fillType == VkRenderSettingsType::Solid) {
-        bind(blendMethod == BlendMethod::Normal ? pipelines.get(context, VkPipe::Solid) : pipelines.blend(context, VkMaterial::Solid, blendMethod));
+        bind(blendMethod == BlendMethod::Normal ? pipelines->get(context, VkPipe::Solid) : pipelines->blend(context, VkMaterial::Solid, blendMethod));
         drawMeshSolid(context, &rdata->bboxMesh, rdata->shape.solid.colorIdx);
     } else {
         bindPaint(settings.paintIdx);
         bindTexture(1, settings.ramps(context));
-        bind(blendMethod == BlendMethod::Normal ? _gradientPipeline(pipelines, context, settings.fillType, false) : _gradientBlendPipeline(pipelines, context, settings.fillType, blendMethod));
+        bind(blendMethod == BlendMethod::Normal ? _gradientPipeline(*pipelines, context, settings.fillType, false) : _gradientBlendPipeline(*pipelines, context, settings.fillType, blendMethod));
         drawMesh(context, &rdata->bboxMesh);
     }
 }
@@ -885,13 +885,13 @@ void VkCompositor::stencilStrokes(VkContext& context, VkShape* rdata)
 {
     setStencilReference(255);
     bindStrokeView(rdata->strokeViewMatIdx);
-    bind(pipelines.get(context, VkPipe::Direct));
+    bind(pipelines->get(context, VkPipe::Direct));
     drawMesh(context, &rdata->stroke.mesh);
     if (!rdata->clips.empty()) {
         setStencilReference(0);
         bindView();
         pushValue(128.0f / 255.0f);
-        bind(pipelines.get(context, VkPipe::MergeDepthStencil));
+        bind(pipelines->get(context, VkPipe::MergeDepthStencil));
         drawMesh(context, &rdata->bboxMesh);
     }
     setStencilReference(0);
@@ -911,11 +911,11 @@ void VkCompositor::drawStrokes(VkContext& context, VkShape* rdata)
     VkPipeline pipeline;
     if (direct) {
         // Draw eligible stroke geometry with stencil tests and writes disabled.
-        pipeline = clipped ? pipelines.clippedStroke(context, settings.fillType) : (solid ? pipelines.get(context, VkPipe::SolidConv) : _gradientPipeline(pipelines, context, settings.fillType, true));
+        pipeline = clipped ? pipelines->clippedStroke(context, settings.fillType) : (solid ? pipelines->get(context, VkPipe::SolidConv) : _gradientPipeline(*pipelines, context, settings.fillType, true));
     } else {
         stencilStrokes(context, rdata);
         mesh = &rdata->stroke.bboxMesh;
-        pipeline = solid ? pipelines.get(context, VkPipe::Solid) : _gradientPipeline(pipelines, context, settings.fillType, false);
+        pipeline = solid ? pipelines->get(context, VkPipe::Solid) : _gradientPipeline(*pipelines, context, settings.fillType, false);
     }
     bindStrokeView(rdata->strokeViewMatIdx);
     bind(pipeline);
@@ -943,13 +943,13 @@ void VkCompositor::blendStrokes(VkContext& context, VkShape* rdata, BlendMethod 
             bindTexture(1, targetTemp0.current.bgTexture.set);
             bindTexture(2, targetTemp0.current.bgTexture.set);
         }
-        bind(pipelines.blend(context, VkMaterial::Solid, blendMethod));
+        bind(pipelines->blend(context, VkMaterial::Solid, blendMethod));
         drawMeshSolid(context, &rdata->stroke.bboxMesh, rdata->stroke.solid.colorIdx);
     } else {
         bindPaint(settings.paintIdx);
         bindTexture(1, settings.ramps(context));
         if (copied) bindTexture(2, targetTemp0.current.bgTexture.set);
-        bind(_gradientBlendPipeline(pipelines, context, settings.fillType, blendMethod));
+        bind(_gradientBlendPipeline(*pipelines, context, settings.fillType, blendMethod));
         drawMesh(context, &rdata->stroke.bboxMesh);
     }
 }
@@ -964,7 +964,7 @@ void VkCompositor::drawImage(VkContext& context, VkPicture* rdata)
     bindView();
     bindPaint(rdata->setting.paintIdx);
     bindTexture(1, rdata->descriptor);
-    bind(pipelines.get(context, VkPipe::ImageDirect));
+    bind(pipelines->get(context, VkPipe::ImageDirect));
     drawMeshImage(context, &rdata->mesh);
 }
 
@@ -977,14 +977,14 @@ void VkCompositor::blendImage(VkContext& context, VkPicture* rdata, BlendMethod 
     bindView();
     // setup stencil rules
     setStencilReference(255);
-    bind(pipelines.get(context, VkPipe::Direct));
+    bind(pipelines->get(context, VkPipe::Direct));
     drawMeshImage(context, &rdata->mesh);
     // blend image
     setStencilReference(0);
     bindPaint(rdata->setting.paintIdx);
     bindTexture(1, rdata->descriptor);
     if (copied) bindTexture(2, targetTemp0.current.bgTexture.set);
-    bind(pipelines.blend(context, VkMaterial::Image, blendMethod));
+    bind(pipelines->blend(context, VkMaterial::Image, blendMethod));
     drawMeshImage(context, &rdata->mesh);
 };
 
@@ -996,18 +996,18 @@ void VkCompositor::clipImage(VkContext& context, VkPicture* rdata, BlendMethod b
     bindView();
     // setup stencil rules
     setStencilReference(255);
-    bind(pipelines.get(context, VkPipe::Direct));
+    bind(pipelines->get(context, VkPipe::Direct));
     drawMeshImage(context, &rdata->mesh);
     // merge depth and stencil buffer
     setStencilReference(0);
     pushValue(128.0f / 255.0f);
-    bind(pipelines.get(context, VkPipe::MergeDepthStencil));
+    bind(pipelines->get(context, VkPipe::MergeDepthStencil));
     drawMeshImage(context, &rdata->mesh);
     // draw image
     setStencilReference(0);
     bindPaint(rdata->setting.paintIdx);
     bindTexture(1, rdata->descriptor);
-    bind(blendMethod == BlendMethod::Normal ? pipelines.get(context, VkPipe::Image) : pipelines.blend(context, VkMaterial::Image, blendMethod));
+    bind(blendMethod == BlendMethod::Normal ? pipelines->get(context, VkPipe::Image) : pipelines->blend(context, VkMaterial::Image, blendMethod));
     drawMeshImage(context, &rdata->mesh);
 }
 
@@ -1019,7 +1019,7 @@ void VkCompositor::drawScene(VkContext& context, VkRenderTarget* scene, VkCompos
     setStencilReference(0);
     bindTexture(1, scene->current.bgTexture.set);
     pushValue(compose->opacity / 255.0f);
-    bind(pipelines.get(context, VkPipe::Scene));
+    bind(pipelines->get(context, VkPipe::Scene));
     drawMeshImage(context, &mesh);
 }
 
@@ -1033,7 +1033,7 @@ void VkCompositor::blendScene(VkContext& context, VkRenderTarget* scene, VkCompo
     bindTexture(1, scene->current.bgTexture.set);
     if (copied) bindTexture(2, targetTemp0.current.bgTexture.set);
     pushValue(compose->opacity / 255.0f);
-    bind(pipelines.blend(context, VkMaterial::Scene, compose->blend));
+    bind(pipelines->blend(context, VkMaterial::Scene, compose->blend));
     drawMeshImage(context, &mesh);
 }
 
@@ -1045,12 +1045,12 @@ void VkCompositor::markupClipPath(VkContext& context, VkShape* rdata)
     if (rdata->stroke.mesh.vbuffer.count > 0) {
         bindStrokeView(rdata->strokeViewMatIdx);
         setStencilReference(255);
-        bind(pipelines.get(context, VkPipe::Direct));
+        bind(pipelines->get(context, VkPipe::Direct));
         drawMesh(context, &rdata->stroke.mesh);
     } else if (rdata->shape.mesh.vbuffer.count > 0) {
         bindView();
         setStencilReference(0);
-        bind(pipelines.get(context, rdata->fillRule == FillRule::NonZero ? VkPipe::NonZero : VkPipe::EvenOdd));
+        bind(pipelines->get(context, rdata->fillRule == FillRule::NonZero ? VkPipe::NonZero : VkPipe::EvenOdd));
         drawMesh(context, &rdata->shape.mesh);
     }
 }
@@ -1086,7 +1086,7 @@ void VkCompositor::renderClipPath(VkContext& context, VkPaint* paint)
     setStencilReference(0);
     bindView();
     pushValue(128.0f / 255.0f);
-    bind(pipelines.get(context, VkPipe::CopyStencilToDepth));
+    bind(pipelines->get(context, VkPipe::CopyStencilToDepth));
     drawMesh(context, &rdata0->bboxMesh);
     // merge clip paths with AND logic
     for (auto p = paint->clips.begin() + 1; p < paint->clips.end(); ++p) {
@@ -1097,22 +1097,22 @@ void VkCompositor::renderClipPath(VkContext& context, VkPaint* paint)
         setStencilReference(0);
         bindView();
         pushValue(190.0f / 255.0f);
-        bind(pipelines.get(context, VkPipe::CopyStencilToDepthInterm));
+        bind(pipelines->get(context, VkPipe::CopyStencilToDepthInterm));
         drawMesh(context, &rdata->bboxMesh);
         // copy depth to stencil
         setStencilReference(1);
-        bind(pipelines.get(context, VkPipe::CopyDepthToStencil));
+        bind(pipelines->get(context, VkPipe::CopyDepthToStencil));
         drawMesh(context, &rdata->bboxMesh);
         // clear depth current (keep stencil)
         setStencilReference(0);
         pushValue(1.0f);
-        bind(pipelines.get(context, VkPipe::ClearDepth));
+        bind(pipelines->get(context, VkPipe::ClearDepth));
         drawMesh(context, &rdata->bboxMesh);
         // clear depth original (keep stencil)
         drawMesh(context, &rdata0->bboxMesh);
         // copy stencil to depth (clear stencil)
         pushValue(128.0f / 255.0f);
-        bind(pipelines.get(context, VkPipe::CopyStencilToDepth));
+        bind(pipelines->get(context, VkPipe::CopyStencilToDepth));
         drawMesh(context, &rdata->bboxMesh);
     }
 }
@@ -1124,7 +1124,7 @@ void VkCompositor::clearClipPath(VkContext& context, VkPaint* paint)
     setStencilReference(0);
     bindView();
     pushValue(1.0f);
-    bind(pipelines.get(context, VkPipe::ClearDepth));
+    bind(pipelines->get(context, VkPipe::ClearDepth));
     for (auto& p : paint->clips) {
         drawMesh(context, &((VkShape*)p)->bboxMesh);
     }
@@ -1155,7 +1155,7 @@ bool VkCompositor::motionBlur(VkContext& context, const VkRenderTargetState& tar
         setScissor(0, 0, aabb.w(), aabb.h());
         bindTexture(1, targetTemp0.getTextureLinear(context));
         pushParams(params);
-        bind(pipelines.effect(context, VkEffect::MotionBlur));
+        bind(pipelines->effect(context, VkEffect::MotionBlur));
         drawMeshImage(context, &mesh);
     }
     endRenderPass();
@@ -1177,7 +1177,7 @@ bool VkCompositor::gaussianBlur(VkContext& context, const VkRenderTargetState& t
             setScissor(aabb.x(), aabb.y(), aabb.w(), aabb.h());
             bindTexture(1, targetTemp0.current.bgTexture.set);
             pushParams(effect->params);
-            bind(pipelines.effect(context, VkEffect::GaussianHorz));
+            bind(pipelines->effect(context, VkEffect::GaussianHorz));
             drawMeshImage(context, &meshDataBlit);
         }
         endRenderPass();
@@ -1186,7 +1186,7 @@ bool VkCompositor::gaussianBlur(VkContext& context, const VkRenderTargetState& t
             setScissor(0, 0, aabb.w(), aabb.h());
             bindTexture(1, targetTemp1.current.bgTexture.set);
             pushParams(effect->params);
-            bind(pipelines.effect(context, VkEffect::GaussianVert));
+            bind(pipelines->effect(context, VkEffect::GaussianVert));
             drawMeshImage(context, &mesh);
         }
         endRenderPass();
@@ -1196,7 +1196,7 @@ bool VkCompositor::gaussianBlur(VkContext& context, const VkRenderTargetState& t
             setScissor(0, 0, aabb.w(), aabb.h());
             bindTexture(1, targetTemp0.current.bgTexture.set);
             pushParams(effect->params);
-            bind(pipelines.effect(context, blur->direction == 1 ? VkEffect::GaussianHorz : VkEffect::GaussianVert));
+            bind(pipelines->effect(context, blur->direction == 1 ? VkEffect::GaussianHorz : VkEffect::GaussianVert));
             drawMeshImage(context, &mesh);
         }
         endRenderPass();
@@ -1220,7 +1220,7 @@ bool VkCompositor::dropShadow(VkContext& context, const VkRenderTargetState& tar
             setScissor(aabb.x(), aabb.y(), aabb.w(), aabb.h());
             bindTexture(1, targetTemp1.current.bgTexture.set);
             pushParams(effect->params);
-            bind(pipelines.effect(context, VkEffect::GaussianHorz));
+            bind(pipelines->effect(context, VkEffect::GaussianHorz));
             drawMeshImage(context, &meshDataBlit);
         }
         endRenderPass();
@@ -1230,7 +1230,7 @@ bool VkCompositor::dropShadow(VkContext& context, const VkRenderTargetState& tar
             setScissor(aabb.x(), aabb.y(), aabb.w(), aabb.h());
             bindTexture(1, targetTemp0.current.bgTexture.set);
             pushParams(effect->params);
-            bind(pipelines.effect(context, VkEffect::GaussianVert));
+            bind(pipelines->effect(context, VkEffect::GaussianVert));
             drawMeshImage(context, &meshDataBlit);
         }
         endRenderPass();
@@ -1243,7 +1243,7 @@ bool VkCompositor::dropShadow(VkContext& context, const VkRenderTargetState& tar
         bindTexture(1, targetTemp0.current.bgTexture.set);
         bindTexture(2, targetTemp1.current.bgTexture.set);
         pushParams(effect->params);
-        bind(pipelines.get(context, VkPipe::Shadow));
+        bind(pipelines->get(context, VkPipe::Shadow));
         drawMeshImage(context, &mesh);
     }
     endRenderPass();
@@ -1263,7 +1263,7 @@ bool VkCompositor::fillEffect(VkContext& context, const VkRenderTargetState& tar
         setScissor(0, 0, aabb.w(), aabb.h());
         bindTexture(1, targetTemp0.current.bgTexture.set);
         pushParams(effect->params);
-        bind(pipelines.effect(context, VkEffect::Fill));
+        bind(pipelines->effect(context, VkEffect::Fill));
         drawMeshImage(context, &mesh);
     }
     endRenderPass();
@@ -1284,7 +1284,7 @@ bool VkCompositor::tintEffect(VkContext& context, const VkRenderTargetState& tar
         setScissor(0, 0, aabb.w(), aabb.h());
         bindTexture(1, targetTemp0.current.bgTexture.set);
         pushParams(effect->params);
-        bind(pipelines.effect(context, VkEffect::Tint));
+        bind(pipelines->effect(context, VkEffect::Tint));
         drawMeshImage(context, &mesh);
     }
     endRenderPass();
@@ -1305,7 +1305,7 @@ bool VkCompositor::tritoneEffect(VkContext& context, const VkRenderTargetState& 
         setScissor(0, 0, aabb.w(), aabb.h());
         bindTexture(1, targetTemp0.current.bgTexture.set);
         pushParams(effect->params);
-        bind(pipelines.effect(context, VkEffect::Tritone));
+        bind(pipelines->effect(context, VkEffect::Tritone));
         drawMeshImage(context, &mesh);
     }
     endRenderPass();

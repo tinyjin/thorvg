@@ -120,7 +120,7 @@ void VkTextureMgr::upload(VkContext& context, VkPipelines& pipelines, VkTextureE
             auto start = offset + row * rowSize;
             auto base = start - start % alignment;
             VkDescriptorBufferInfo bufferInfo{buffer, base, rows * rowSize + (start - base)};
-            auto set = context.transientSet(context.layoutPrepare);
+            auto set = context.transientSet(pipelines.layoutPrepare);
             VkWriteDescriptorSet writes[2]{{VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET}, {VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET}};
             writes[0].dstSet = set;
             writes[0].dstBinding = 0;
@@ -135,8 +135,8 @@ void VkTextureMgr::upload(VkContext& context, VkPipelines& pipelines, VkTextureE
             context.vkUpdateDescriptorSets(context.device, 2, writes, 0, nullptr);
 
             const uint32_t constants[]{surface->w, rows, surface->stride, uint32_t((start - base) / sizeof(uint32_t)), row};
-            context.vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_COMPUTE, context.prepareLayout, 0, 1, &set, 0, nullptr);
-            context.vkCmdPushConstants(cmd, context.prepareLayout, VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(constants), constants);
+            context.vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_COMPUTE, pipelines.prepareLayout, 0, 1, &set, 0, nullptr);
+            context.vkCmdPushConstants(cmd, pipelines.prepareLayout, VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(constants), constants);
             context.vkCmdDispatch(cmd, (surface->w + 15) / 16, (rows + 15) / 16, 1);
         }
     } else {

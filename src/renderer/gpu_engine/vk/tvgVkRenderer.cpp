@@ -312,7 +312,7 @@ Result VkRenderer::createSwapchain(VkSurfaceKHR surface)
     Array<VkImage> images(count);
     ctx.vkGetSwapchainImagesKHR(ctx.device, swapchain, &count, images.data);
     images.count = count;
-    auto pass = mCompositor.pipelineStates().blitPass(ctx, format.format, true);
+    auto pass = ctx.pipelines->blitPass(ctx, format.format, true);
     for (auto& p : images) {
         VkImageViewCreateInfo viewInfo{VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO};
         viewInfo.image = p;
@@ -348,7 +348,7 @@ Result VkRenderer::createImageTarget(VkImage image)
     mTarget.format = format;
     mTarget.extent = {mSurface.w, mSurface.h};
     mTarget.views.push(view);
-    mTarget.framebuffers.push(mContext.createFramebuffer(mCompositor.pipelineStates().blitPass(mContext, format, false), &view, 1, mSurface.w, mSurface.h));
+    mTarget.framebuffers.push(mContext.createFramebuffer(mContext.pipelines->blitPass(mContext, format, false), &view, 1, mSurface.w, mSurface.h));
     return Result::Success;
 }
 
@@ -465,7 +465,7 @@ RenderData VkRenderer::prepare(RenderSurface* surface, RenderData data, const Ma
     auto update = cacheStale || refreshTex || (image->surface != surface) || (image->filter != filter);
     if (update && !mContext.invalid()) {
         image->release(mTextures, mContext);
-        auto* entry = mTextures.retain(mContext, mCompositor.pipelineStates(), surface, filter, refreshTex);
+        auto* entry = mTextures.retain(mContext, *mContext.pipelines, surface, filter, refreshTex);
         image->setup(entry->texture.image, entry->descriptor.set, surface, filter, mTextures.stamp);
     }
 
