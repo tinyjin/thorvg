@@ -451,6 +451,13 @@ bool MtlRendererImpl::sync()
         // insure that surface and offscreen target have the same size
         if (!mClearBuffer && (dstTexture.width == mRenderTargetRoot.width) && (dstTexture.height == mRenderTargetRoot.height)) {
             mCompositor.blit(mContext, mCommandBuffer, &mRenderTargetRoot, dstTexture, mSurface.premultiplied);
+        } else {
+            auto desc = [MTLRenderPassDescriptor renderPassDescriptor];
+            desc.colorAttachments[0].texture = dstTexture;
+            desc.colorAttachments[0].loadAction = MTLLoadActionClear;
+            desc.colorAttachments[0].clearColor = MTLClearColorMake(0.0, 0.0, 0.0, 0.0);
+            desc.colorAttachments[0].storeAction = MTLStoreActionStore;
+            [[mCommandBuffer renderCommandEncoderWithDescriptor:desc] endEncoding];
         }
         if (drawable) [mCommandBuffer presentDrawable:drawable];
         commit();
