@@ -78,10 +78,10 @@ id<MTLTexture> MtlContext::createTexture(uint32_t width, uint32_t height, MTLPix
     return [device newTextureWithDescriptor:desc];
 }
 
-id<MTLTexture> MtlContext::createTexStorage(uint32_t width, uint32_t height, MTLPixelFormat format)
+id<MTLTexture> MtlContext::createTexStorage(uint32_t width, uint32_t height, MTLPixelFormat format, bool writable)
 {
     auto desc = [MTLTextureDescriptor texture2DDescriptorWithPixelFormat:format width:width height:height mipmapped:NO];
-    desc.usage = MTLTextureUsageShaderRead | MTLTextureUsageShaderWrite | MTLTextureUsageRenderTarget;
+    desc.usage = MTLTextureUsageShaderRead | MTLTextureUsageRenderTarget | (writable ? MTLTextureUsageShaderWrite : 0);
     desc.storageMode = MTLStorageModePrivate;
     return [device newTextureWithDescriptor:desc];
 }

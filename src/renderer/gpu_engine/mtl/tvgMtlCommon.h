@@ -68,7 +68,7 @@ struct MtlContext
     void release();
 
     id<MTLTexture> createTexture(uint32_t width, uint32_t height, MTLPixelFormat format);
-    id<MTLTexture> createTexStorage(uint32_t width, uint32_t height, MTLPixelFormat format);
+    id<MTLTexture> createTexStorage(uint32_t width, uint32_t height, MTLPixelFormat format, bool writable = false);
     id<MTLTexture> createTexAttachment(uint32_t width, uint32_t height, MTLPixelFormat format, uint32_t sampleCount, bool transient);
     bool allocateTexture(id<MTLTexture>& texture, uint32_t width, uint32_t height, MTLPixelFormat format, const void* data, uint32_t bytesPerRow);
     void releaseTexture(id<MTLTexture>& texture);
