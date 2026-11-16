@@ -58,6 +58,7 @@ struct VkPipelines
 {
     VkDescriptorSetLayout layoutUniforms{};  // set 0: view and paint dynamic uniform buffers
     VkDescriptorSetLayout layoutTexture{};   // set 1, 2: a combined image sampler
+    VkDescriptorSetLayout layoutBackdrop{};  // set 3: the multisampled color as an input attachment
     VkDescriptorSetLayout layoutPrepare{};   // compute: storage buffer and storage image
     VkPipelineLayout pipelineLayout{};
     VkPipelineLayout prepareLayout{};

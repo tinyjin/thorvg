@@ -4,19 +4,32 @@
 #include "image.glsl"
 #include "ramp.glsl"
 
-// Custom blending with the backdrop copy of the current render target.
+// Custom blending with the samples of the current render target read as an input attachment.
 // BLEND is specialized with the tvg::BlendMethod value, MATERIAL selects the source.
 layout(constant_id = 0) const int BLEND = 0;
 layout(constant_id = 1) const int MATERIAL = 0;  // 0 solid, 1 linear, 2 radial, 3 conic, 4 image, 5 scene
 
-layout(set = 2, binding = 0) uniform sampler2D uBackdrop;
+layout(input_attachment_index = 0, set = 3, binding = 0) uniform subpassInputMS uBackdrop;
 layout(location = 0) in vec4 vData;  // solid color, gradient coordinate or texture coordinate
 
 struct FragData { vec3 Sc; float Sa; float So; vec3 Dc; float Da; };
 
+// only the covered samples: the others may belong to another primitive of the same draw
+vec4 readBackdrop()
+{
+    vec4 sum = vec4(0.0);
+    int count = 0;
+    for (int i = 0; i < 4; ++i) {
+        if ((gl_SampleMaskIn[0] & (1 << i)) == 0) continue;
+        sum += subpassLoad(uBackdrop, i);
+        ++count;
+    }
+    return sum / float(max(count, 1));
+}
+
 FragData getFragData()
 {
-    vec4 dst = texelFetch(uBackdrop, ivec2(gl_FragCoord.xy), 0);
+    vec4 dst = readBackdrop();
     FragData d;
     d.Dc = dst.rgb;
     d.Da = dst.a;

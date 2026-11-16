@@ -627,11 +627,12 @@ VkDescriptorPool VkContext::createPool(bool freeable, uint32_t sets)
         {VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, sets},
         {VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC, 2 * VK_MAX_FRAMES},
         {VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, sets},
-        {VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, sets}};
+        {VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, sets},
+        {VK_DESCRIPTOR_TYPE_INPUT_ATTACHMENT, sets}};
     VkDescriptorPoolCreateInfo info{VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO};
     info.flags = freeable ? VK_DESCRIPTOR_POOL_CREATE_FREE_DESCRIPTOR_SET_BIT : 0;
     info.maxSets = sets;
-    info.poolSizeCount = 4;
+    info.poolSizeCount = 5;
     info.pPoolSizes = sizes;
     VkDescriptorPool pool = VK_NULL_HANDLE;
     vkCreateDescriptorPool(device, &info, nullptr, &pool);

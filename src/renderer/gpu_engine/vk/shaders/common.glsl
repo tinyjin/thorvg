@@ -1,7 +1,8 @@
 // Shared declarations. Every graphics pipeline uses one pipeline layout:
 //   set 0: dynamic uniform buffers (view matrix, paint settings) in the frame buffer
 //   set 1: primary texture (gradient ramp atlas, image, scene source)
-//   set 2: secondary texture (blend backdrop, mask, shadow)
+//   set 2: secondary texture (mask, shadow)
+//   set 3: input attachment of the multisampled color (custom blend backdrop)
 //   push constants: effect parameters and a scalar (opacity or clip depth)
 
 layout(set = 0, binding = 0) uniform ViewBlock { mat4 uViewMat; };

@@ -51,13 +51,14 @@ private:
     VkStageBufferSolidColor stageBufferSolidColor{};
     Array<VkShaderTypePaintSettings> stageBufferPaint;
     Array<VkShaderTypeMat4x4fBlock> stageBufferViewMat;
-    struct DepthStencilAttachment
+    struct Attachment
     {
         uint32_t width, height;
         VkTexture texture;
+        VkDescriptor backdrop;
     };
-    Array<DepthStencilAttachment> depthStencilAttachments;
-    Array<DepthStencilAttachment> transientAttachments;
+    Array<Attachment> depthStencilAttachments;
+    Array<Attachment> transientAttachments;
     // per frame storage of all staged data: [view matrices | paint settings | geometry | colors | indices]
     struct FrameBuffer
     {
@@ -74,7 +75,8 @@ private:
     RenderRegion clipRegion{};  // where the active clip paths are resolved
     // bound state
     VkPipeline currentPipeline{};
-    VkDescriptorSet currentSets[3]{};
+    VkDescriptorSet currentSets[4]{};
+    VkDescriptorSet backdrop{};
     uint32_t viewOffset{}, paintOffset{};
     bool uniformsDirty{};
     // intermediate render targets
@@ -92,11 +94,11 @@ private:
     void setScissor(int32_t x, int32_t y, uint32_t w, uint32_t h);
     void setScissorRegion(const RenderRegion& region);
     VkImageView getDepthStencilView(VkContext& context, uint32_t width, uint32_t height);
-    VkImageView getTransientView(VkContext& context, uint32_t width, uint32_t height);
+    const Attachment* getTransientAttachment(VkContext& context, uint32_t width, uint32_t height);
     void requestQuad(VkMesh& mesh, const VkRenderTargetState& src, const VkRenderTargetState& dst, const VkRenderTargetState* mask = nullptr);
     void copyTexture(VkContext& context, VkTexture& src, VkTexture& dst, uint32_t width, uint32_t height, int32_t x, int32_t y);
     void copyEffectTexture(VkContext& context, VkRenderTarget* dst, const VkRenderTargetState& src, bool clear = false);
-    bool copyBackdrop(VkContext& context, BlendMethod method);
+    bool readBackdrop(BlendMethod method);
 
     // bindings
     void resetBindings();
