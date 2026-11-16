@@ -74,14 +74,6 @@ void MtlTextureMgr::upload(MtlContext& context, MtlTextureEntry& entry, const Re
     entry.binding.sampler = (filter == FilterMethod::Bilinear) ? context.samplerLinearClamp : context.samplerNearestClamp;
 }
 
-static id<MTLComputePipelineState> _createPrepPipeline(MtlContext& context, MtlPipelines& pipelines, const char* name)
-{
-    NSError* error = nil;
-    auto pipeline = [context.device newComputePipelineStateWithFunction:pipelines.function(name) error:&error];
-    if (!pipeline) TVGERR("MTL_ENGINE", "Failed to create a compute pipeline: %s", error.localizedDescription.UTF8String);
-    return pipeline;
-}
-
 bool MtlTextureMgr::flushPreprocess(MtlContext& context, MtlPipelines& pipelines)
 {
     if (prepRequests.empty()) return true;
@@ -101,11 +93,8 @@ bool MtlTextureMgr::flushPreprocess(MtlContext& context, MtlPipelines& pipelines
             prepStaging = context.createTexStorage(width, height, MTLPixelFormatRGBA8Unorm);
         }
 
-        auto& pipeline = (preprocess & Bgr) ? prepPremultBgr : prepPremult;
-        if (!pipeline) pipeline = _createPrepPipeline(context, pipelines, (preprocess & Bgr) ? "cs_premult_bgr" : "cs_premult");
-
         auto compute = [commands computeCommandEncoder];
-        [compute setComputePipelineState:pipeline];
+        [compute setComputePipelineState:pipelines.premultiply(preprocess & Bgr)];
         [compute setTexture:texture atIndex:0];
         [compute setTexture:prepStaging atIndex:1];
         [compute dispatchThreadgroups:MTLSizeMake((width + 15) / 16, (height + 15) / 16, 1) threadsPerThreadgroup:MTLSizeMake(16, 16, 1)];
@@ -201,9 +190,6 @@ void MtlTextureMgr::clear(MtlContext& context)
 {
     prepRequests.clear();
     context.releaseTexture(prepStaging);
-    [prepPremult release];
-    [prepPremultBgr release];
-    prepPremult = prepPremultBgr = nil;
 
     while (auto* surfaceEntry = surfaces.front()) {
         while (auto* entry = surfaceEntry->bilinear.front()) {

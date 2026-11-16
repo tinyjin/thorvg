@@ -708,7 +708,7 @@ bool MtlRendererImpl::postUpdate()
 {
     if (mContext.invalid()) return false;
     @autoreleasepool {
-        auto result = mTextures.flushPreprocess(mContext, mCompositor.pipelineStates());
+        auto result = mTextures.flushPreprocess(mContext, *mContext.pipelines);
         mContext.flushUploads();
         return result;
     }

@@ -48,6 +48,8 @@ struct MtlBinding
     bool operator!=(const MtlBinding& rhs) const { return !(*this == rhs); }
 };
 
+struct MtlPipelines;
+
 struct MtlContext
 {
     id<MTLDevice> device{};
@@ -59,6 +61,7 @@ struct MtlContext
     id<MTLSamplerState> samplerLinearClamp{};
     id<MTLCommandBuffer> uploads{};
     id<MTLBlitCommandEncoder> uploadEncoder{};
+    MtlPipelines* pipelines{};
     bool tiled{};
 
     void initialize(id<MTLDevice> device, id<MTLCommandQueue> queue);

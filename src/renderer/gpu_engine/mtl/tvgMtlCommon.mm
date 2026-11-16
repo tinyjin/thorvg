@@ -20,7 +20,7 @@
  * SOFTWARE.
  */
 
-#include "tvgMtlCommon.h"
+#include "tvgMtlPipelines.h"
 
 #pragma clang diagnostic ignored "-Wunguarded-availability-new"
 
@@ -37,11 +37,14 @@ void MtlContext::initialize(id<MTLDevice> device, id<MTLCommandQueue> queue)
 
     // A selector test instead of @available avoids linking the compiler runtime version check.
     tiled = [device respondsToSelector:@selector(supportsFamily:)] && [device supportsFamily:MTLGPUFamilyApple1];
+    pipelines = MtlPipelines::acquire(*this);
 }
 
 void MtlContext::release()
 {
     flushUploads();
+    if (pipelines) MtlPipelines::release(pipelines);
+    pipelines = nullptr;
     [samplerLinearClamp release];
     [samplerLinearMirror release];
     [samplerLinearRepeat release];

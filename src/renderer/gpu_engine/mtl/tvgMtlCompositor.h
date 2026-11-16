@@ -44,8 +44,7 @@ struct MtlRenderTargetState
 class MtlCompositor
 {
 private:
-    // pipelines
-    MtlPipelines pipelines{};
+    MtlPipelines* pipelines{};
     // stage buffers
     MtlStageBufferGeometry stageBufferGeometry{};
     MtlStageBufferSolidColor stageBufferSolidColor{};
@@ -143,7 +142,6 @@ public:
     void reset(MtlContext& context);
     void flush(MtlContext& context);
     void releaseFrameOn(id<MTLCommandBuffer> commandBuffer);
-    MtlPipelines& pipelineStates() { return pipelines; }
 
     // request shapes for drawing (staging)
     void requestShape(MtlShape* shape);

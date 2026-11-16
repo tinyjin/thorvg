@@ -23,6 +23,7 @@
 #ifndef _TVG_MTL_PIPELINES_H_
 #define _TVG_MTL_PIPELINES_H_
 
+#include "tvgLock.h"
 #include "tvgMtlCommon.h"
 
 enum class MtlRenderSettingsType;
@@ -44,8 +45,12 @@ enum class MtlPipe : uint32_t
     Count
 };
 
+// Shared by the canvases rendering with the same device. Pipelines are created on first use.
 struct MtlPipelines
 {
+    static MtlPipelines* acquire(MtlContext& context);
+    static void release(MtlPipelines* pipelines);
+
     const MtlPipeline& get(MtlPipe pipe);
     const MtlPipeline& solidBlend(BlendMethod method);
     const MtlPipeline& radialBlend(BlendMethod method);
@@ -57,28 +62,38 @@ struct MtlPipelines
     const MtlPipeline& sceneCompose(uint32_t method);
     id<MTLRenderPipelineState> blit(MTLPixelFormat format, bool premultiplied);
     id<MTLRenderPipelineState> restore();
-    id<MTLFunction> function(const char* name);
-
-    void initialize(MtlContext& context);
-    void release();
+    id<MTLComputePipelineState> premultiply(bool bgr);
 
 private:
     enum Material : uint32_t { MaterialSolid = 0, MaterialLinear, MaterialRadial, MaterialConic, MaterialImage, MaterialScene, MaterialCount };
 
+    struct BlitPipeline
+    {
+        MTLPixelFormat format;
+        bool premultiplied;
+        id<MTLRenderPipelineState> state;
+    };
+
+    void initialize(MtlContext& context);
+    void destroy();
+    id<MTLFunction> function(const char* name);
     id<MTLLibrary> createLibrary(const char* source);
     id<MTLLibrary> blendLibrary(Material material);
     const MtlPipeline& blendPipeline(Material material, BlendMethod method);
 
-    MtlContext* context{};
+    id<MTLDevice> device{};
+    bool tiled{};
+    uint32_t refCnt = 1;
+    StrictKey key;
     id<MTLLibrary> library{};
     id<MTLLibrary> blendLibraries[MaterialCount]{};
     MtlPipeline pipelines[(uint32_t)MtlPipe::Count]{};
     MtlPipeline blends[MaterialCount][18]{};
     MtlPipeline strokeClip[4]{};
     MtlPipeline compose[11]{};
-    id<MTLRenderPipelineState> blitPipelines[2]{};
+    Array<BlitPipeline> blits;
     id<MTLRenderPipelineState> restorePipeline{};
-    MTLPixelFormat blitFormat = MTLPixelFormatInvalid;
+    id<MTLComputePipelineState> premultiplies[2]{};
 };
 
 #endif // _TVG_MTL_PIPELINES_H_
