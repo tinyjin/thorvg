@@ -261,7 +261,7 @@ Result VkRenderer::createSwapchain(VkSurfaceKHR surface)
         }
     }
 
-    auto premultiplied = (mSurface.cs != ColorSpace::ABGR8888S);
+    auto premultiplied = (mSurface.cs != ColorSpace::ABGR8888S && mSurface.cs != ColorSpace::ARGB8888S);
     auto alpha = VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR;
     if (!mSurface.opaque) {
         auto wanted = premultiplied ? VK_COMPOSITE_ALPHA_PRE_MULTIPLIED_BIT_KHR : VK_COMPOSITE_ALPHA_POST_MULTIPLIED_BIT_KHR;
