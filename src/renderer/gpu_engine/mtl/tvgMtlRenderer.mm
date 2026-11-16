@@ -223,20 +223,24 @@ RenderData MtlRendererImpl::prepare(const RenderShape& rshape, RenderData data, 
 
     // shape
     if (shape->shape.setting.valid) {
-        auto lost = !shape->shape.setting.gradientData.texture;
-        if (rshape.fill && (lost || (flags & (RenderUpdateFlag::Gradient | RenderUpdateFlag::Transform)))) {
-            @autoreleasepool { shape->shape.setting.update(mContext, rshape.fill, &transform, lost || (flags & RenderUpdateFlag::Gradient)); }
-        } else if (flags & (RenderUpdateFlag::Color | RenderUpdateFlag::Gradient)) {
+        if (rshape.fill) {
+            auto lost = !shape->shape.setting.gradientData.texture;
+            if (lost || (flags & (RenderUpdateFlag::Gradient | RenderUpdateFlag::Transform))) {
+                @autoreleasepool { shape->shape.setting.update(mContext, rshape.fill, &transform, lost || (flags & RenderUpdateFlag::Gradient)); }
+            }
+        } else {
             shape->shape.solid.color = rshape.color;
             shape->shape.setting.fillType = MtlRenderSettingsType::Solid;
         }
     }
     // stroke
     if (shape->stroke.setting.valid) {
-        auto lost = !shape->stroke.setting.gradientData.texture;
-        if (rshape.stroke->fill && (lost || (flags & (RenderUpdateFlag::GradientStroke | RenderUpdateFlag::Transform)))) {
-            @autoreleasepool { shape->stroke.setting.update(mContext, rshape.stroke->fill, nullptr, lost || (flags & RenderUpdateFlag::GradientStroke)); }
-        } else if (flags & (RenderUpdateFlag::Stroke | RenderUpdateFlag::GradientStroke)) {
+        if (rshape.stroke->fill) {
+            auto lost = !shape->stroke.setting.gradientData.texture;
+            if (lost || (flags & (RenderUpdateFlag::GradientStroke | RenderUpdateFlag::Transform))) {
+                @autoreleasepool { shape->stroke.setting.update(mContext, rshape.stroke->fill, nullptr, lost || (flags & RenderUpdateFlag::GradientStroke)); }
+            }
+        } else {
             shape->stroke.solid.color = rshape.stroke->color;
             shape->stroke.setting.fillType = MtlRenderSettingsType::Solid;
         }
