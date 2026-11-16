@@ -41,8 +41,7 @@
     X(vkGetPhysicalDeviceFormatProperties) \
     X(vkGetPhysicalDeviceSurfaceSupportKHR) \
     X(vkGetPhysicalDeviceSurfaceCapabilitiesKHR) \
-    X(vkGetPhysicalDeviceSurfaceFormatsKHR) \
-    X(vkGetPhysicalDeviceSurfacePresentModesKHR)
+    X(vkGetPhysicalDeviceSurfaceFormatsKHR)
 
 #define VK_DEVICE_FUNCTIONS(X) \
     X(vkAllocateCommandBuffers) \

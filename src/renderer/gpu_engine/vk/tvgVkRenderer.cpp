@@ -249,18 +249,6 @@ Result VkRenderer::createSwapchain(VkSurfaceKHR surface)
         }
     }
 
-    // prefer the low latency mode without tearing, otherwise the always available fifo
-    auto presentMode = VK_PRESENT_MODE_FIFO_KHR;
-    if (ctx.vkGetPhysicalDeviceSurfacePresentModesKHR) {
-        ctx.vkGetPhysicalDeviceSurfacePresentModesKHR(ctx.physicalDevice, surface, &count, nullptr);
-        Array<VkPresentModeKHR> modes(count);
-        ctx.vkGetPhysicalDeviceSurfacePresentModesKHR(ctx.physicalDevice, surface, &count, modes.data);
-        modes.count = count;
-        ARRAY_FOREACH(p, modes) {
-            if (*p == VK_PRESENT_MODE_MAILBOX_KHR) presentMode = *p;
-        }
-    }
-
     auto premultiplied = (mSurface.cs != ColorSpace::ABGR8888S && mSurface.cs != ColorSpace::ARGB8888S);
     auto alpha = VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR;
     if (!mSurface.opaque) {
@@ -301,7 +289,7 @@ Result VkRenderer::createSwapchain(VkSurfaceKHR surface)
     // a rotation is applied by the blit, the presentation engine would otherwise rotate every frame
     info.preTransform = (turns || !(caps.supportedTransforms & VK_SURFACE_TRANSFORM_IDENTITY_BIT_KHR)) ? caps.currentTransform : VK_SURFACE_TRANSFORM_IDENTITY_BIT_KHR;
     info.compositeAlpha = alpha;
-    info.presentMode = presentMode;
+    info.presentMode = VK_PRESENT_MODE_FIFO_KHR;
     info.clipped = VK_TRUE;
     info.oldSwapchain = mTarget.swapchain;
 
