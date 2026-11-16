@@ -164,7 +164,6 @@ struct VkGarbage
     Array<VkDeviceMemory> memories;
     Array<VkFramebuffer> framebuffers;
     Array<VkDescriptor> descriptors;
-    Array<VkSwapchainKHR> swapchains;
 
     void flush(VkContext& context);
 };
@@ -280,7 +279,6 @@ struct VkContext
     void release(VkDescriptor& descriptor);
     void release(VkFramebuffer& framebuffer);
     void release(VkImageView& view);
-    void release(VkSwapchainKHR& swapchain);
 
     // records an image layout transition with a conservative dependency
     void transition(VkCommandBuffer cmd, VkTexture& texture, VkImageLayout layout);

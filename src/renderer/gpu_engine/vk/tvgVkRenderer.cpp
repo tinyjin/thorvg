@@ -191,7 +191,7 @@ void VkRenderer::releaseTarget(bool keepSurface)
     // the presentation engine may still wait on the semaphores, which a fence does not cover
     if (mTarget.swapchain) mContext.vkQueueWaitIdle(mContext.queue);
     for (auto& p : mTarget.presented) mContext.vkDestroySemaphore(mContext.device, p, nullptr);
-    mContext.release(mTarget.swapchain);
+    if (mTarget.swapchain) mContext.vkDestroySwapchainKHR(mContext.device, mTarget.swapchain, nullptr);
     auto surface = mTarget.surface;
     mTarget = VkPresentTarget();
     if (keepSurface) mTarget.surface = surface;
