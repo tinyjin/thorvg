@@ -51,7 +51,7 @@ static const MtlPipeline& _gradientBlendPipeline(MtlPipelines& pipelines, MtlRen
 
 void MtlCompositor::initialize(MtlContext& context, uint32_t width, uint32_t height)
 {
-    pipelines.initialize(context);
+    pipelines = context.pipelines;
     frameSlots = dispatch_semaphore_create(MTL_MAX_FRAMES_IN_FLIGHT);
     resize(context, width, height);
     meshDataBlit.blitBox();
@@ -76,7 +76,7 @@ void MtlCompositor::release(MtlContext& context)
     stageBufferSolidColor = {};
     stageBufferPaint = {};
     stageBufferViewMat = {};
-    pipelines.release();
+    pipelines = nullptr;
 }
 
 void MtlCompositor::resize(MtlContext& context, uint32_t width, uint32_t height)
@@ -206,7 +206,7 @@ void MtlCompositor::beginRenderPassMS(MtlContext& context, id<MTLCommandBuffer> 
     renderPassEncoder = [[commandBuffer renderCommandEncoderWithDescriptor:desc] retain];
     assert(renderPassEncoder);
     if (!clearBuffer) {
-        [renderPassEncoder setRenderPipelineState:pipelines.restore()];
+        [renderPassEncoder setRenderPipelineState:pipelines->restore()];
         [renderPassEncoder setFragmentTexture:target->textureRestore atIndex:0];
         [renderPassEncoder drawPrimitives:MTLPrimitiveTypeTriangleStrip vertexStart:0 vertexCount:4];
     }
@@ -375,7 +375,7 @@ void MtlCompositor::blit(MtlContext& context, id<MTLCommandBuffer> commandBuffer
     desc.colorAttachments[0].loadAction = MTLLoadActionDontCare;
     desc.colorAttachments[0].storeAction = MTLStoreActionStore;
     auto encoder = [commandBuffer renderCommandEncoderWithDescriptor:desc];
-    [encoder setRenderPipelineState:pipelines.blit(dst.pixelFormat, premultiplied)];
+    [encoder setRenderPipelineState:pipelines->blit(dst.pixelFormat, premultiplied)];
     [encoder setFragmentTexture:src->texture atIndex:0];
     [encoder drawPrimitives:MTLPrimitiveTypeTriangleStrip vertexStart:0 vertexCount:4];
     [encoder endEncoding];
@@ -535,7 +535,7 @@ void MtlCompositor::renderSolidBatch(const MtlSolidBatchRange& range)
     setScissorRegion(range.viewport);
     [renderPassEncoder setStencilReferenceValue:0];
     bindView();
-    bind(pipelines.get(MtlPipe::SolidBatch));
+    bind(pipelines->get(MtlPipe::SolidBatch));
     bindVertex(MtlSlotPosition, range.vertexOffset);
     bindColor(range.colorOffset);
     drawIndexed(range.indexCount, range.indexOffset);
@@ -548,7 +548,7 @@ void MtlCompositor::renderImageBatch(MtlImage* image, const MtlImageBatchRange& 
     bindView();
     bindPaint(image->setting.paintIdx);
     bindTexture(0, image->binding);
-    bind(pipelines.get(MtlPipe::ImageDirect));
+    bind(pipelines->get(MtlPipe::ImageDirect));
     bindVertex(MtlSlotPosition, range.vertexOffset);
     bindVertex(MtlSlotAttribute, range.texCoordOffset);
     drawIndexed(range.indexCount, range.indexOffset);
@@ -559,7 +559,7 @@ void MtlCompositor::renderStencilBatch(const Array<MtlShape*>& renderShapes, con
     setScissorRegion(range.viewport);
     [renderPassEncoder setStencilReferenceValue:0];
     bindView();
-    bind(range.fillRule == FillRule::NonZero ? pipelines.get(MtlPipe::Nonzero) : pipelines.get(MtlPipe::Evenodd));
+    bind(range.fillRule == FillRule::NonZero ? pipelines->get(MtlPipe::Nonzero) : pipelines->get(MtlPipe::Evenodd));
     bindVertex(MtlSlotPosition, range.stencil.vertexOffset);
     drawIndexed(range.stencil.indexCount, range.stencil.indexOffset);
 
@@ -567,7 +567,7 @@ void MtlCompositor::renderStencilBatch(const Array<MtlShape*>& renderShapes, con
 
     // Keep the common all-solid case identical to the original two-draw path.
     if (range.solidOnly) {
-        bind(pipelines.get(MtlPipe::SolidStencilBatch));
+        bind(pipelines->get(MtlPipe::SolidStencilBatch));
         bindColor(range.colorOffset);
         drawIndexed(range.cover.indexCount, range.cover.indexOffset);
         return;
@@ -594,11 +594,11 @@ void MtlCompositor::renderStencilBatch(const Array<MtlShape*>& renderShapes, con
                 bindColor(range.colorOffset);
                 colorsBound = true;
             }
-            bind(pipelines.get(MtlPipe::SolidStencilBatch));
+            bind(pipelines->get(MtlPipe::SolidStencilBatch));
         } else {
             bindPaint(settings.paintIdx);
             bindTexture(0, settings.gradientData.binding);
-            bind(_gradientPipeline(pipelines, settings.fillType, false));
+            bind(_gradientPipeline(*pipelines, settings.fillType, false));
         }
         drawIndexed(firstIndex - batchFirstIndex, range.cover.indexOffset + batchFirstIndex * sizeof(uint32_t));
     }
@@ -634,7 +634,7 @@ void MtlCompositor::composeScene(MtlContext& context, MtlRenderTarget* src, MtlR
     [renderPassEncoder setStencilReferenceValue:0];
     bindTexture(0, src->bgTexture);
     bindTexture(1, mask->bgTexture);
-    bind(pipelines.sceneCompose((uint32_t)cmp->method));
+    bind(pipelines->sceneCompose((uint32_t)cmp->method));
     bindVertex(MtlSlotMask, mesh.toffset + 4 * sizeof(Point));
     drawMeshImage(context, &mesh);
 }
@@ -650,7 +650,7 @@ void MtlCompositor::drawShape(MtlContext& context, MtlShape* rdata)
 
     // setup stencil rules
     if (!convex) {
-        auto& stencilPipeline = (rdata->fillRule == FillRule::NonZero) ? pipelines.get(MtlPipe::Nonzero) : pipelines.get(MtlPipe::Evenodd);
+        auto& stencilPipeline = (rdata->fillRule == FillRule::NonZero) ? pipelines->get(MtlPipe::Nonzero) : pipelines->get(MtlPipe::Evenodd);
         [renderPassEncoder setStencilReferenceValue:0];
         bindView();
         bind(stencilPipeline);
@@ -663,12 +663,12 @@ void MtlCompositor::drawShape(MtlContext& context, MtlShape* rdata)
     bindView();
 
     if (settings.fillType == MtlRenderSettingsType::Solid) {
-        bind(convex ? pipelines.get(MtlPipe::SolidConv) : pipelines.get(MtlPipe::Solid));
+        bind(convex ? pipelines->get(MtlPipe::SolidConv) : pipelines->get(MtlPipe::Solid));
         drawMeshSolid(context, mesh, rdata->shape.solid.colorIdx);
     } else {
         bindPaint(settings.paintIdx);
         bindTexture(0, settings.gradientData.binding);
-        bind(_gradientPipeline(pipelines, settings.fillType, convex));
+        bind(_gradientPipeline(*pipelines, settings.fillType, convex));
         drawMesh(context, mesh);
     }
 }
@@ -681,7 +681,7 @@ void MtlCompositor::blendShape(MtlContext& context, MtlShape* rdata, BlendMethod
     // render shape with blend settings
     setScissorRegion(rdata->viewport);
     // setup stencil rules
-    auto& stencilPipeline = (rdata->fillRule == FillRule::NonZero) ? pipelines.get(MtlPipe::Nonzero) : pipelines.get(MtlPipe::Evenodd);
+    auto& stencilPipeline = (rdata->fillRule == FillRule::NonZero) ? pipelines->get(MtlPipe::Nonzero) : pipelines->get(MtlPipe::Evenodd);
     [renderPassEncoder setStencilReferenceValue:0];
     bindView();
     bind(stencilPipeline);
@@ -692,13 +692,13 @@ void MtlCompositor::blendShape(MtlContext& context, MtlShape* rdata, BlendMethod
     bindView();
     if (settings.fillType == MtlRenderSettingsType::Solid) {
         if (copied) bindTexture(1, targetTemp0.bgTexture);
-        bind(pipelines.solidBlend(blendMethod));
+        bind(pipelines->solidBlend(blendMethod));
         drawMeshSolid(context, &rdata->bboxMesh, rdata->shape.solid.colorIdx);
     } else {
         bindPaint(settings.paintIdx);
         bindTexture(0, settings.gradientData.binding);
         if (copied) bindTexture(1, targetTemp0.bgTexture);
-        bind(_gradientBlendPipeline(pipelines, settings.fillType, blendMethod));
+        bind(_gradientBlendPipeline(*pipelines, settings.fillType, blendMethod));
         drawMesh(context, &rdata->bboxMesh);
     }
 }
@@ -709,7 +709,7 @@ void MtlCompositor::clipShape(MtlContext& context, MtlShape* rdata, BlendMethod 
     MtlRenderSettings& settings = rdata->shape.setting;
     setScissorRegion(rdata->viewport);
     // setup stencil rules
-    auto& stencilPipeline = (rdata->fillRule == FillRule::NonZero) ? pipelines.get(MtlPipe::Nonzero) : pipelines.get(MtlPipe::Evenodd);
+    auto& stencilPipeline = (rdata->fillRule == FillRule::NonZero) ? pipelines->get(MtlPipe::Nonzero) : pipelines->get(MtlPipe::Evenodd);
     [renderPassEncoder setStencilReferenceValue:0];
     bindView();
     bind(stencilPipeline);
@@ -718,18 +718,18 @@ void MtlCompositor::clipShape(MtlContext& context, MtlShape* rdata, BlendMethod 
     // merge depth and stencil buffer
     [renderPassEncoder setStencilReferenceValue:0];
     bindDepth(128);
-    bind(pipelines.get(MtlPipe::MergeDepthStencil));
+    bind(pipelines->get(MtlPipe::MergeDepthStencil));
     drawMesh(context, &rdata->bboxMesh);
     // setup fill rules
     [renderPassEncoder setStencilReferenceValue:0];
     bindView();
     if (settings.fillType == MtlRenderSettingsType::Solid) {
-        bind(blendMethod == BlendMethod::Normal ? pipelines.get(MtlPipe::Solid) : pipelines.solidBlend(blendMethod));
+        bind(blendMethod == BlendMethod::Normal ? pipelines->get(MtlPipe::Solid) : pipelines->solidBlend(blendMethod));
         drawMeshSolid(context, &rdata->bboxMesh, rdata->shape.solid.colorIdx);
     } else {
         bindPaint(settings.paintIdx);
         bindTexture(0, settings.gradientData.binding);
-        bind(blendMethod == BlendMethod::Normal ? _gradientPipeline(pipelines, settings.fillType, false) : _gradientBlendPipeline(pipelines, settings.fillType, blendMethod));
+        bind(blendMethod == BlendMethod::Normal ? _gradientPipeline(*pipelines, settings.fillType, false) : _gradientBlendPipeline(*pipelines, settings.fillType, blendMethod));
         drawMesh(context, &rdata->bboxMesh);
     }
 }
@@ -738,13 +738,13 @@ void MtlCompositor::stencilStrokes(MtlContext& context, MtlShape* rdata)
 {
     [renderPassEncoder setStencilReferenceValue:255];
     bindStrokeView(rdata->strokeViewMatIdx);
-    bind(pipelines.get(MtlPipe::Direct));
+    bind(pipelines->get(MtlPipe::Direct));
     drawMesh(context, &rdata->stroke.mesh);
     if (!rdata->clips.empty()) {
         [renderPassEncoder setStencilReferenceValue:0];
         bindView();
         bindDepth(128);
-        bind(pipelines.get(MtlPipe::MergeDepthStencil));
+        bind(pipelines->get(MtlPipe::MergeDepthStencil));
         drawMesh(context, &rdata->bboxMesh);
     }
     [renderPassEncoder setStencilReferenceValue:0];
@@ -764,11 +764,11 @@ void MtlCompositor::drawStrokes(MtlContext& context, MtlShape* rdata)
     const MtlPipeline* pipeline;
     if (direct) {
         // Draw eligible stroke geometry with stencil tests and writes disabled.
-        pipeline = clipped ? &pipelines.clippedStroke(settings.fillType) : (solid ? &pipelines.get(MtlPipe::SolidConv) : &_gradientPipeline(pipelines, settings.fillType, true));
+        pipeline = clipped ? &pipelines->clippedStroke(settings.fillType) : (solid ? &pipelines->get(MtlPipe::SolidConv) : &_gradientPipeline(*pipelines, settings.fillType, true));
     } else {
         stencilStrokes(context, rdata);
         mesh = &rdata->stroke.bboxMesh;
-        pipeline = solid ? &pipelines.get(MtlPipe::Solid) : &_gradientPipeline(pipelines, settings.fillType, false);
+        pipeline = solid ? &pipelines->get(MtlPipe::Solid) : &_gradientPipeline(*pipelines, settings.fillType, false);
     }
     bindStrokeView(strokeView);
     bind(*pipeline);
@@ -793,13 +793,13 @@ void MtlCompositor::blendStrokes(MtlContext& context, MtlShape* rdata, BlendMeth
     bindStrokeView(strokeView);
     if (settings.fillType == MtlRenderSettingsType::Solid) {
         if (copied) bindTexture(1, targetTemp0.bgTexture);
-        bind(pipelines.solidBlend(blendMethod));
+        bind(pipelines->solidBlend(blendMethod));
         drawMeshSolid(context, &rdata->stroke.bboxMesh, rdata->stroke.solid.colorIdx);
     } else {
         bindPaint(settings.paintIdx);
         bindTexture(0, settings.gradientData.binding);
         if (copied) bindTexture(1, targetTemp0.bgTexture);
-        bind(_gradientBlendPipeline(pipelines, settings.fillType, blendMethod));
+        bind(_gradientBlendPipeline(*pipelines, settings.fillType, blendMethod));
         drawMesh(context, &rdata->stroke.bboxMesh);
     }
 };
@@ -814,7 +814,7 @@ void MtlCompositor::drawImage(MtlContext& context, MtlImage* rdata)
     bindView();
     bindPaint(settings.paintIdx);
     bindTexture(0, rdata->binding);
-    bind(pipelines.get(MtlPipe::ImageDirect));
+    bind(pipelines->get(MtlPipe::ImageDirect));
     drawMeshImage(context, &rdata->mesh);
 }
 
@@ -827,7 +827,7 @@ void MtlCompositor::blendImage(MtlContext& context, MtlImage* rdata, BlendMethod
     // setup stencil rules
     [renderPassEncoder setStencilReferenceValue:255];
     bindView();
-    bind(pipelines.get(MtlPipe::Direct));
+    bind(pipelines->get(MtlPipe::Direct));
     drawMeshImage(context, &rdata->mesh);
     // blend image
     [renderPassEncoder setStencilReferenceValue:0];
@@ -835,7 +835,7 @@ void MtlCompositor::blendImage(MtlContext& context, MtlImage* rdata, BlendMethod
     bindPaint(settings.paintIdx);
     bindTexture(0, rdata->binding);
     if (copied) bindTexture(1, targetTemp0.bgTexture);
-    bind(pipelines.imageBlend(blendMethod));
+    bind(pipelines->imageBlend(blendMethod));
     drawMeshImage(context, &rdata->mesh);
 };
 
@@ -847,19 +847,19 @@ void MtlCompositor::clipImage(MtlContext& context, MtlImage* rdata, BlendMethod 
     // setup stencil rules
     [renderPassEncoder setStencilReferenceValue:255];
     bindView();
-    bind(pipelines.get(MtlPipe::Direct));
+    bind(pipelines->get(MtlPipe::Direct));
     drawMeshImage(context, &rdata->mesh);
     // merge depth and stencil buffer
     [renderPassEncoder setStencilReferenceValue:0];
     bindDepth(128);
-    bind(pipelines.get(MtlPipe::MergeDepthStencil));
+    bind(pipelines->get(MtlPipe::MergeDepthStencil));
     drawMeshImage(context, &rdata->mesh);
     // draw image
     [renderPassEncoder setStencilReferenceValue:0];
     bindView();
     bindPaint(settings.paintIdx);
     bindTexture(0, rdata->binding);
-    bind(blendMethod == BlendMethod::Normal ? pipelines.get(MtlPipe::Image) : pipelines.imageBlend(blendMethod));
+    bind(blendMethod == BlendMethod::Normal ? pipelines->get(MtlPipe::Image) : pipelines->imageBlend(blendMethod));
     drawMeshImage(context, &rdata->mesh);
 }
 
@@ -870,7 +870,7 @@ void MtlCompositor::drawScene(MtlContext& context, MtlRenderTarget* scene, MtlCo
     [renderPassEncoder setStencilReferenceValue:0];
     bindTexture(0, scene->bgTexture);
     bindOpacity(compose->opacity);
-    bind(pipelines.get(MtlPipe::Scene));
+    bind(pipelines->get(MtlPipe::Scene));
     drawMeshImage(context, &mesh);
 }
 
@@ -883,7 +883,7 @@ void MtlCompositor::blendScene(MtlContext& context, MtlRenderTarget* scene, MtlC
     bindTexture(0, scene->bgTexture);
     if (copied) bindTexture(1, targetTemp0.bgTexture);
     bindOpacity(compose->opacity);
-    bind(pipelines.sceneBlend(compose->blend));
+    bind(pipelines->sceneBlend(compose->blend));
     drawMeshImage(context, &mesh);
 }
 
@@ -894,11 +894,11 @@ void MtlCompositor::markupClipPath(MtlContext& context, MtlShape* rdata)
     if (rdata->stroke.mesh.vbuffer.count > 0) {
         bindStrokeView(rdata->strokeViewMatIdx);
         [renderPassEncoder setStencilReferenceValue:255];
-        bind(pipelines.get(MtlPipe::Direct));
+        bind(pipelines->get(MtlPipe::Direct));
         drawMesh(context, &rdata->stroke.mesh);
     } else if (rdata->shape.mesh.vbuffer.count > 0) {
         bindView();
-        auto& stencilPipeline = (rdata->fillRule == FillRule::NonZero) ? pipelines.get(MtlPipe::Nonzero) : pipelines.get(MtlPipe::Evenodd);
+        auto& stencilPipeline = (rdata->fillRule == FillRule::NonZero) ? pipelines->get(MtlPipe::Nonzero) : pipelines->get(MtlPipe::Evenodd);
         [renderPassEncoder setStencilReferenceValue:0];
         bind(stencilPipeline);
         drawMesh(context, &rdata->shape.mesh);
@@ -934,7 +934,7 @@ void MtlCompositor::renderClipPath(MtlContext& context, MtlPaint* paint)
     [renderPassEncoder setStencilReferenceValue:0];
     bindView();
     bindDepth(128);
-    bind(pipelines.get(MtlPipe::CopyStencilToDepth));
+    bind(pipelines->get(MtlPipe::CopyStencilToDepth));
     drawMesh(context, &rdata0->bboxMesh);
     // merge clip paths with AND logic
     for (auto p = paint->clips.begin() + 1; p < paint->clips.end(); ++p) {
@@ -945,27 +945,27 @@ void MtlCompositor::renderClipPath(MtlContext& context, MtlPaint* paint)
         [renderPassEncoder setStencilReferenceValue:0];
         bindView();
         bindDepth(190);
-        bind(pipelines.get(MtlPipe::CopyStencilToDepthInterm));
+        bind(pipelines->get(MtlPipe::CopyStencilToDepthInterm));
         drawMesh(context, &rdata->bboxMesh);
         // copy depth to stencil
         [renderPassEncoder setStencilReferenceValue:1];
         bindDepth(190);
-        bind(pipelines.get(MtlPipe::CopyDepthToStencil));
+        bind(pipelines->get(MtlPipe::CopyDepthToStencil));
         drawMesh(context, &rdata->bboxMesh);
         // clear depth current (keep stencil)
         [renderPassEncoder setStencilReferenceValue:0];
         bindDepth(255);
-        bind(pipelines.get(MtlPipe::ClearDepth));
+        bind(pipelines->get(MtlPipe::ClearDepth));
         drawMesh(context, &rdata->bboxMesh);
         // clear depth original (keep stencil)
         [renderPassEncoder setStencilReferenceValue:0];
         bindDepth(255);
-        bind(pipelines.get(MtlPipe::ClearDepth));
+        bind(pipelines->get(MtlPipe::ClearDepth));
         drawMesh(context, &rdata0->bboxMesh);
         // copy stencil to depth (clear stencil)
         [renderPassEncoder setStencilReferenceValue:0];
         bindDepth(128);
-        bind(pipelines.get(MtlPipe::CopyStencilToDepth));
+        bind(pipelines->get(MtlPipe::CopyStencilToDepth));
         drawMesh(context, &rdata->bboxMesh);
     }
 }
@@ -980,7 +980,7 @@ void MtlCompositor::clearClipPath(MtlContext& context, MtlPaint* paint)
         [renderPassEncoder setStencilReferenceValue:0];
         bindView();
         bindDepth(255);
-        bind(pipelines.get(MtlPipe::ClearDepth));
+        bind(pipelines->get(MtlPipe::ClearDepth));
         drawMesh(context, &rdata->bboxMesh);
     }
 }
@@ -1002,7 +1002,7 @@ bool MtlCompositor::motionBlur(MtlContext& context, const MtlRenderTargetState& 
         setScissor(0, 0, aabb.w(), aabb.h());
         bindTexture(0, targetTemp0.bgTextureLinear);
         bindParams(effect->params);
-        bind(pipelines.get(MtlPipe::EffectMotionBlur));
+        bind(pipelines->get(MtlPipe::EffectMotionBlur));
         drawMeshImage(context, &mesh);
     }
     endRenderPass();
@@ -1023,7 +1023,7 @@ bool MtlCompositor::gaussianBlur(MtlContext& context, const MtlRenderTargetState
             setScissor(aabb.x(), aabb.y(), aabb.w(), aabb.h());
             bindTexture(0, targetTemp0.bgTexture);
             bindParams(effect->params);
-            bind(pipelines.get(MtlPipe::EffectGaussianHorz));
+            bind(pipelines->get(MtlPipe::EffectGaussianHorz));
             drawMeshImage(context, &meshDataBlit);
         }
         endRenderPass();
@@ -1032,7 +1032,7 @@ bool MtlCompositor::gaussianBlur(MtlContext& context, const MtlRenderTargetState
             setScissor(0, 0, aabb.w(), aabb.h());
             bindTexture(0, targetTemp1.bgTexture);
             bindParams(effect->params);
-            bind(pipelines.get(MtlPipe::EffectGaussianVert));
+            bind(pipelines->get(MtlPipe::EffectGaussianVert));
             drawMeshImage(context, &mesh);
         }
         endRenderPass();
@@ -1042,7 +1042,7 @@ bool MtlCompositor::gaussianBlur(MtlContext& context, const MtlRenderTargetState
             setScissor(0, 0, aabb.w(), aabb.h());
             bindTexture(0, targetTemp0.bgTexture);
             bindParams(effect->params);
-            bind(pipelines.get(MtlPipe::EffectGaussianHorz));
+            bind(pipelines->get(MtlPipe::EffectGaussianHorz));
             drawMeshImage(context, &mesh);
         }
         endRenderPass();
@@ -1052,7 +1052,7 @@ bool MtlCompositor::gaussianBlur(MtlContext& context, const MtlRenderTargetState
             setScissor(0, 0, aabb.w(), aabb.h());
             bindTexture(0, targetTemp0.bgTexture);
             bindParams(effect->params);
-            bind(pipelines.get(MtlPipe::EffectGaussianVert));
+            bind(pipelines->get(MtlPipe::EffectGaussianVert));
             drawMeshImage(context, &mesh);
         }
         endRenderPass();
@@ -1075,7 +1075,7 @@ bool MtlCompositor::dropShadow(MtlContext& context, const MtlRenderTargetState& 
             setScissor(aabb.x(), aabb.y(), aabb.w(), aabb.h());
             bindTexture(0, targetTemp1.bgTexture);
             bindParams(effect->params);
-            bind(pipelines.get(MtlPipe::EffectGaussianHorz));
+            bind(pipelines->get(MtlPipe::EffectGaussianHorz));
             drawMeshImage(context, &meshDataBlit);
         }
         endRenderPass();
@@ -1085,7 +1085,7 @@ bool MtlCompositor::dropShadow(MtlContext& context, const MtlRenderTargetState& 
             setScissor(aabb.x(), aabb.y(), aabb.w(), aabb.h());
             bindTexture(0, targetTemp0.bgTexture);
             bindParams(effect->params);
-            bind(pipelines.get(MtlPipe::EffectGaussianVert));
+            bind(pipelines->get(MtlPipe::EffectGaussianVert));
             drawMeshImage(context, &meshDataBlit);
         }
         endRenderPass();
@@ -1098,7 +1098,7 @@ bool MtlCompositor::dropShadow(MtlContext& context, const MtlRenderTargetState& 
         bindTexture(0, targetTemp0.bgTexture);
         bindTexture(1, targetTemp1.bgTexture);
         bindParams(effect->params);
-        bind(pipelines.get(MtlPipe::EffectDropShadow));
+        bind(pipelines->get(MtlPipe::EffectDropShadow));
         drawMeshImage(context, &mesh);
     }
     endRenderPass();
@@ -1117,7 +1117,7 @@ bool MtlCompositor::fillEffect(MtlContext& context, const MtlRenderTargetState& 
         setScissor(0, 0, aabb.w(), aabb.h());
         bindTexture(0, targetTemp0.bgTexture);
         bindParams(effect->params);
-        bind(pipelines.get(MtlPipe::EffectFill));
+        bind(pipelines->get(MtlPipe::EffectFill));
         drawMeshImage(context, &mesh);
     }
     endRenderPass();
@@ -1137,7 +1137,7 @@ bool MtlCompositor::tintEffect(MtlContext& context, const MtlRenderTargetState& 
         setScissor(0, 0, aabb.w(), aabb.h());
         bindTexture(0, targetTemp0.bgTexture);
         bindParams(effect->params);
-        bind(pipelines.get(MtlPipe::EffectTint));
+        bind(pipelines->get(MtlPipe::EffectTint));
         drawMeshImage(context, &mesh);
     }
     endRenderPass();
@@ -1157,7 +1157,7 @@ bool MtlCompositor::tritoneEffect(MtlContext& context, const MtlRenderTargetStat
         setScissor(0, 0, aabb.w(), aabb.h());
         bindTexture(0, targetTemp0.bgTexture);
         bindParams(effect->params);
-        bind(pipelines.get(MtlPipe::EffectTritone));
+        bind(pipelines->get(MtlPipe::EffectTritone));
         drawMeshImage(context, &mesh);
     }
     endRenderPass();

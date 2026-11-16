@@ -229,7 +229,7 @@ id<MTLLibrary> MtlPipelines::createLibrary(const char* source)
     auto options = [[MTLCompileOptions alloc] init];
     options.fastMathEnabled = NO;  // Shaders rely on IEEE infinities, for example at the radial gradient focal point.
     NSError* error = nil;
-    auto library = [context->device newLibraryWithSource:[NSString stringWithUTF8String:source] options:options error:&error];
+    auto library = [device newLibraryWithSource:[NSString stringWithUTF8String:source] options:options error:&error];
     if (!library) TVGERR("MTL_ENGINE", "Failed to compile shaders: %s", error.localizedDescription.UTF8String);
     [options release];
     return library;
@@ -240,7 +240,7 @@ id<MTLLibrary> MtlPipelines::blendLibrary(Material material)
     if (!blendLibraries[material]) {
         static const char* sources[]{cMtlShaderSrc_Solid_Blend, cMtlShaderSrc_Linear_Blend, cMtlShaderSrc_Radial_Blend, cMtlShaderSrc_Conic_Blend, cMtlShaderSrc_Image_Blend, cMtlShaderSrc_Scene_Blend};
         char source[32768];
-        strcpy(source, context->tiled ? "#define MTL_TILED\n" : "");
+        strcpy(source, tiled ? "#define MTL_TILED\n" : "");
         strcat(source, cMtlShaderSrc_Common);
         strcat(source, sources[material]);
         strcat(source, cMtlShaderSrc_BlendFuncs);
@@ -256,19 +256,21 @@ id<MTLFunction> MtlPipelines::function(const char* name)
 
 const MtlPipeline& MtlPipelines::get(MtlPipe pipe)
 {
+    ScopedLock lock(key);
     auto& pipeline = pipelines[(uint32_t)pipe];
     if (pipeline.state) return pipeline;
 
     const auto& info = _pipelineInfos[(uint32_t)pipe];
     auto desc = _pipelineDescriptor(function(info.vs), info.fs ? function(info.fs) : nil, info.layout, MTL_TARGET_FORMAT, info.depthStencil != nullptr);
     if (info.output == Output::Normal) _setBlend(desc.colorAttachments[0], MTLBlendFactorOne, MTLBlendFactorOneMinusSourceAlpha, MTLBlendFactorOneMinusSourceAlpha);
-    pipeline.state = _createPipeline(context->device, desc);
-    if (info.depthStencil) pipeline.depthStencil = _createDepthStencil(context->device, *info.depthStencil);
+    pipeline.state = _createPipeline(device, desc);
+    if (info.depthStencil) pipeline.depthStencil = _createDepthStencil(device, *info.depthStencil);
     return pipeline;
 }
 
 const MtlPipeline& MtlPipelines::blendPipeline(Material material, BlendMethod method)
 {
+    ScopedLock lock(key);
     auto& pipeline = blends[material][(uint32_t)method];
     if (pipeline.state) return pipeline;
 
@@ -286,8 +288,8 @@ const MtlPipeline& MtlPipelines::blendPipeline(Material material, BlendMethod me
         case BlendMethod::Add: _setBlend(color, MTLBlendFactorOne, MTLBlendFactorOne, MTLBlendFactorOne); break;
         default: break;
     }
-    pipeline.state = _createPipeline(context->device, desc);
-    pipeline.depthStencil = _createDepthStencil(context->device, material == MaterialScene ? _dsScene : _dsShape);
+    pipeline.state = _createPipeline(device, desc);
+    pipeline.depthStencil = _createDepthStencil(device, material == MaterialScene ? _dsScene : _dsShape);
     return pipeline;
 }
 
@@ -300,6 +302,7 @@ const MtlPipeline& MtlPipelines::sceneBlend(BlendMethod method) { return blendPi
 
 const MtlPipeline& MtlPipelines::clippedStroke(MtlRenderSettingsType type)
 {
+    ScopedLock lock(key);
     auto index = uint32_t(type) - 1;
     auto& pipeline = strokeClip[index];
     if (pipeline.state) return pipeline;
@@ -308,57 +311,100 @@ const MtlPipeline& MtlPipelines::clippedStroke(MtlRenderSettingsType type)
     auto solid = type == MtlRenderSettingsType::Solid;
     auto desc = _pipelineDescriptor(function(solid ? "vs_solid" : "vs_gradient"), function(fragmentShaders[index]), solid ? Layout::Solid : Layout::Shape, MTL_TARGET_FORMAT, true);
     _setBlend(desc.colorAttachments[0], MTLBlendFactorOne, MTLBlendFactorOneMinusSourceAlpha, MTLBlendFactorOneMinusSourceAlpha);
-    pipeline.state = _createPipeline(context->device, desc);
-    pipeline.depthStencil = _createDepthStencil(context->device, _dsClippedStroke);
+    pipeline.state = _createPipeline(device, desc);
+    pipeline.depthStencil = _createDepthStencil(device, _dsClippedStroke);
     return pipeline;
 }
 
 const MtlPipeline& MtlPipelines::sceneCompose(uint32_t method)
 {
+    ScopedLock lock(key);
     auto& pipeline = compose[method];
     if (pipeline.state) return pipeline;
 
     auto desc = _pipelineDescriptor(function("vs_compose"), function(_composeNames[method]), Layout::Compose, MTL_TARGET_FORMAT, true);
     if (method < (uint32_t)MaskMethod::Add) _setBlend(desc.colorAttachments[0], MTLBlendFactorOne, MTLBlendFactorOneMinusSourceAlpha, MTLBlendFactorOneMinusSourceAlpha);
-    pipeline.state = _createPipeline(context->device, desc);
-    pipeline.depthStencil = _createDepthStencil(context->device, _dsScene);
+    pipeline.state = _createPipeline(device, desc);
+    pipeline.depthStencil = _createDepthStencil(device, _dsScene);
     return pipeline;
 }
 
 id<MTLRenderPipelineState> MtlPipelines::blit(MTLPixelFormat format, bool premultiplied)
 {
-    if (blitFormat != format) {
-        [blitPipelines[0] release];
-        [blitPipelines[1] release];
-        blitPipelines[0] = blitPipelines[1] = nil;
-        blitFormat = format;
+    ScopedLock lock(key);
+    for (auto& p : blits) {
+        if (p.format == format && p.premultiplied == premultiplied) return p.state;
     }
-    auto& pipeline = blitPipelines[premultiplied ? 1 : 0];
-    if (!pipeline) {
-        auto desc = [[MTLRenderPipelineDescriptor alloc] init];
-        desc.vertexFunction = function("vs_blit");
-        desc.fragmentFunction = function(premultiplied ? "fs_blit" : "fs_blit_unpremultiplied");
-        desc.colorAttachments[0].pixelFormat = format;
-        pipeline = _createPipeline(context->device, desc);
-        [desc release];
-    }
-    return pipeline;
+    auto desc = [[MTLRenderPipelineDescriptor alloc] init];
+    desc.vertexFunction = function("vs_blit");
+    desc.fragmentFunction = function(premultiplied ? "fs_blit" : "fs_blit_unpremultiplied");
+    desc.colorAttachments[0].pixelFormat = format;
+    auto state = _createPipeline(device, desc);
+    [desc release];
+    if (state) blits.push({format, premultiplied, state});
+    return state;
 }
 
 // copies the resolved contents of a target into every sample of its multisampled pass
 id<MTLRenderPipelineState> MtlPipelines::restore()
 {
+    ScopedLock lock(key);
     if (!restorePipeline) {
         auto desc = _pipelineDescriptor(function("vs_blit"), function("fs_blit"), Layout::Quad, MTLPixelFormatRGBA8Unorm, true);
         desc.vertexDescriptor = nil;
-        restorePipeline = _createPipeline(context->device, desc);
+        restorePipeline = _createPipeline(device, desc);
     }
     return restorePipeline;
 }
 
+id<MTLComputePipelineState> MtlPipelines::premultiply(bool bgr)
+{
+    ScopedLock lock(key);
+    auto& pipeline = premultiplies[bgr];
+    if (!pipeline) {
+        NSError* error = nil;
+        pipeline = [device newComputePipelineStateWithFunction:function(bgr ? "cs_premult_bgr" : "cs_premult") error:&error];
+        if (!pipeline) TVGERR("MTL_ENGINE", "Failed to create a compute pipeline: %s", error.localizedDescription.UTF8String);
+    }
+    return pipeline;
+}
+
+static StrictKey _registryKey;
+static Array<MtlPipelines*> _registry;
+
+MtlPipelines* MtlPipelines::acquire(MtlContext& context)
+{
+    ScopedLock lock(_registryKey);
+    for (auto& p : _registry) {
+        if (p->device == context.device) {
+            ++p->refCnt;
+            return p;
+        }
+    }
+    auto pipelines = new MtlPipelines;
+    pipelines->initialize(context);
+    _registry.push(pipelines);
+    return pipelines;
+}
+
+void MtlPipelines::release(MtlPipelines* pipelines)
+{
+    ScopedLock lock(_registryKey);
+    if (--pipelines->refCnt > 0) return;
+    for (uint32_t i = 0; i < _registry.count; ++i) {
+        if (_registry[i] != pipelines) continue;
+        _registry[i] = _registry.last();
+        _registry.pop();
+        break;
+    }
+    pipelines->destroy();
+    delete(pipelines);
+}
+
 void MtlPipelines::initialize(MtlContext& context)
 {
-    this->context = &context;
+    device = [context.device retain];
+    tiled = context.tiled;
     library = createLibrary(cMtlShaderSrc_Main);
 }
 
@@ -369,7 +415,7 @@ static void _release(MtlPipeline& pipeline)
     pipeline = {};
 }
 
-void MtlPipelines::release()
+void MtlPipelines::destroy()
 {
     for (auto& pipeline : pipelines) _release(pipeline);
     for (auto& material : blends) {
@@ -377,18 +423,10 @@ void MtlPipelines::release()
     }
     for (auto& pipeline : strokeClip) _release(pipeline);
     for (auto& pipeline : compose) _release(pipeline);
-    for (auto& pipeline : blitPipelines) {
-        [pipeline release];
-        pipeline = nil;
-    }
+    for (auto& p : blits) [p.state release];
     [restorePipeline release];
-    restorePipeline = nil;
-    for (auto& blendLibrary : blendLibraries) {
-        [blendLibrary release];
-        blendLibrary = nil;
-    }
+    for (auto pipeline : premultiplies) [pipeline release];
+    for (auto blendLibrary : blendLibraries) [blendLibrary release];
     [library release];
-    library = nil;
-    blitFormat = MTLPixelFormatInvalid;
-    context = nullptr;
+    [device release];
 }

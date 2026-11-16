@@ -64,8 +64,6 @@ struct MtlTextureMgr
     static MTLPixelFormat textureFormat(const RenderSurface* surface);
 
     tvg::Inlist<SurfaceEntry> surfaces;
-    id<MTLComputePipelineState> prepPremultBgr{};
-    id<MTLComputePipelineState> prepPremult{};
     id<MTLTexture> prepStaging{};
     Array<MtlTextureEntry*> prepRequests;
     uint16_t stamp = 1;
