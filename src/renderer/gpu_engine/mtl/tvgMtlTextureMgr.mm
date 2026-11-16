@@ -90,7 +90,7 @@ bool MtlTextureMgr::flushPreprocess(MtlContext& context, MtlPipelines& pipelines
         auto height = texture.height;
         if (!prepStaging || width > prepStaging.width || height > prepStaging.height) {
             context.releaseTexture(prepStaging);
-            prepStaging = context.createTexStorage(width, height, MTLPixelFormatRGBA8Unorm);
+            prepStaging = context.createTexStorage(width, height, MTLPixelFormatRGBA8Unorm, true);
         }
 
         auto compute = [commands computeCommandEncoder];
