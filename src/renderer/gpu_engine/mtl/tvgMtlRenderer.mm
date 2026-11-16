@@ -225,7 +225,7 @@ RenderData MtlRendererImpl::prepare(const RenderShape& rshape, RenderData data, 
     if (shape->shape.setting.valid) {
         auto lost = !shape->shape.setting.gradientData.texture;
         if (rshape.fill && (lost || (flags & (RenderUpdateFlag::Gradient | RenderUpdateFlag::Transform)))) {
-            shape->shape.setting.update(mContext, rshape.fill, &transform, lost || (flags & RenderUpdateFlag::Gradient));
+            @autoreleasepool { shape->shape.setting.update(mContext, rshape.fill, &transform, lost || (flags & RenderUpdateFlag::Gradient)); }
         } else if (flags & (RenderUpdateFlag::Color | RenderUpdateFlag::Gradient)) {
             shape->shape.solid.color = rshape.color;
             shape->shape.setting.fillType = MtlRenderSettingsType::Solid;
@@ -235,7 +235,7 @@ RenderData MtlRendererImpl::prepare(const RenderShape& rshape, RenderData data, 
     if (shape->stroke.setting.valid) {
         auto lost = !shape->stroke.setting.gradientData.texture;
         if (rshape.stroke->fill && (lost || (flags & (RenderUpdateFlag::GradientStroke | RenderUpdateFlag::Transform)))) {
-            shape->stroke.setting.update(mContext, rshape.stroke->fill, nullptr, lost || (flags & RenderUpdateFlag::GradientStroke));
+            @autoreleasepool { shape->stroke.setting.update(mContext, rshape.stroke->fill, nullptr, lost || (flags & RenderUpdateFlag::GradientStroke)); }
         } else if (flags & (RenderUpdateFlag::Stroke | RenderUpdateFlag::GradientStroke)) {
             shape->stroke.solid.color = rshape.stroke->color;
             shape->stroke.setting.fillType = MtlRenderSettingsType::Solid;
@@ -263,7 +263,7 @@ RenderData MtlRendererImpl::prepare(RenderSurface* surface, RenderData data, con
     auto cacheStale = !image->binding.texture || (image->stamp != mTextures.stamp);
     auto refreshTex = (flags & RenderUpdateFlag::Image);
     auto update = cacheStale || refreshTex || (image->surface != surface) || (image->filter != filter);
-    if (update) {
+    if (update) @autoreleasepool {
         image->release(mTextures, mContext);
         auto* entry = mTextures.retain(mContext, surface, filter, refreshTex);
         image->setup(entry->binding, surface, filter, mTextures.stamp);
