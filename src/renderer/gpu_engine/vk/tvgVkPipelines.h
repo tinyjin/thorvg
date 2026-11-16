@@ -23,6 +23,7 @@
 #ifndef _TVG_VK_PIPELINES_H_
 #define _TVG_VK_PIPELINES_H_
 
+#include "tvgLock.h"
 #include "tvgVkCommon.h"
 #include "tvgVkShaderSrc.h"
 
@@ -52,14 +53,19 @@ enum class VkPipe
     Count
 };
 
-// Pipelines are created on first use and cached for the lifetime of the context.
+// Shared by the canvases rendering with the same device. Pipelines are created on first use.
 struct VkPipelines
 {
+    VkDescriptorSetLayout layoutUniforms{};  // set 0: view and paint dynamic uniform buffers
+    VkDescriptorSetLayout layoutTexture{};   // set 1, 2: a combined image sampler
+    VkDescriptorSetLayout layoutPrepare{};   // compute: storage buffer and storage image
+    VkPipelineLayout pipelineLayout{};
+    VkPipelineLayout prepareLayout{};
     VkRenderPass passMS{};
     VkRenderPass passSS[2]{};  // index 0: clear, 1: load
 
-    void initialize(VkContext& context);
-    void release(VkContext& context);
+    static VkPipelines* acquire(VkContext& context);
+    static void release(VkContext& context, VkPipelines* pipelines);
 
     VkPipeline get(VkContext& context, VkPipe pipe);
     VkPipeline clippedStroke(VkContext& context, VkRenderSettingsType type);
@@ -111,6 +117,10 @@ private:
         VkRenderPass pass;
     };
 
+    VkDevice device{};
+    uint32_t refCnt = 1;
+    StrictKey key;
+    VkPipelineCache cache{};
     VkShaderModule modules[ShaderCount]{};
     VkPipeline pipes[(int)VkPipe::Count]{};
     VkPipeline strokeClips[4]{};
@@ -121,8 +131,11 @@ private:
     Array<BlitPipeline> blits;
     Array<BlitPass> blitPasses;
 
+    bool initialize(VkContext& context);
+    void destroy(VkContext& context);
     VkShaderModule module(VkContext& context, Shader shader);
     VkPipeline create(VkContext& context, const Desc& desc);
+    VkRenderPass pass(VkContext& context, VkFormat format, bool present);
     Desc desc(VkPipe pipe);
 };
 

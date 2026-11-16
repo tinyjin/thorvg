@@ -45,8 +45,7 @@ class VkCompositor
 {
 private:
     VkContext* ctx{};
-    // pipelines
-    VkPipelines pipelines{};
+    VkPipelines* pipelines{};
     // stage buffers
     VkStageBufferGeometry stageBufferGeometry{};
     VkStageBufferSolidColor stageBufferSolidColor{};
@@ -146,7 +145,6 @@ public:
     void release(VkContext& context);
     void resize(VkContext& context, uint32_t width, uint32_t height);
     void evict(VkContext& context, const VkRenderTargetPool& targets);
-    VkPipelines& pipelineStates() { return pipelines; }
 
     // render passes workflow
     void beginRenderPassMS(VkContext& context, VkCommandBuffer commandBuffer, const VkRenderTargetState& targetState, bool clearBuffer);

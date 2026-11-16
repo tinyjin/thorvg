@@ -106,8 +106,104 @@ static VkPipelineDepthStencilStateCreateInfo _depthOnly(VkCompareOp compare)
 }
 
 
-void VkPipelines::initialize(VkContext& context)
+static StrictKey _registryKey;
+static Array<VkPipelines*> _registry;
+
+
+VkPipelines* VkPipelines::acquire(VkContext& context)
 {
+    ScopedLock lock(_registryKey);
+    ARRAY_FOREACH(p, _registry) {
+        if ((*p)->device == context.device) {
+            ++(*p)->refCnt;
+            return *p;
+        }
+    }
+    auto pipelines = new VkPipelines;
+    if (!pipelines->initialize(context)) {
+        pipelines->destroy(context);
+        delete(pipelines);
+        return nullptr;
+    }
+    _registry.push(pipelines);
+    return pipelines;
+}
+
+
+void VkPipelines::release(VkContext& context, VkPipelines* pipelines)
+{
+    ScopedLock lock(_registryKey);
+    if (--pipelines->refCnt > 0) return;
+    for (uint32_t i = 0; i < _registry.count; ++i) {
+        if (_registry[i] != pipelines) continue;
+        _registry[i] = _registry.last();
+        _registry.pop();
+        break;
+    }
+    pipelines->destroy(context);
+    delete(pipelines);
+}
+
+
+bool VkPipelines::initialize(VkContext& context)
+{
+    device = context.device;
+
+    VkPipelineCacheCreateInfo cacheInfo{VK_STRUCTURE_TYPE_PIPELINE_CACHE_CREATE_INFO};
+    context.vkCreatePipelineCache(context.device, &cacheInfo, nullptr, &cache);
+
+    // descriptor set layouts
+    {
+        VkDescriptorSetLayoutBinding bindings[2]{};
+        for (uint32_t i = 0; i < 2; ++i) {
+            bindings[i].binding = i;
+            bindings[i].descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC;
+            bindings[i].descriptorCount = 1;
+            bindings[i].stageFlags = VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT;
+        }
+        VkDescriptorSetLayoutCreateInfo info{VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO};
+        info.bindingCount = 2;
+        info.pBindings = bindings;
+        context.vkCreateDescriptorSetLayout(context.device, &info, nullptr, &layoutUniforms);
+    }
+    {
+        VkDescriptorSetLayoutBinding binding{0, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 1, VK_SHADER_STAGE_FRAGMENT_BIT, nullptr};
+        VkDescriptorSetLayoutCreateInfo info{VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO};
+        info.bindingCount = 1;
+        info.pBindings = &binding;
+        context.vkCreateDescriptorSetLayout(context.device, &info, nullptr, &layoutTexture);
+    }
+    {
+        VkDescriptorSetLayoutBinding bindings[2]{
+            {0, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1, VK_SHADER_STAGE_COMPUTE_BIT, nullptr},
+            {1, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, 1, VK_SHADER_STAGE_COMPUTE_BIT, nullptr}};
+        VkDescriptorSetLayoutCreateInfo info{VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO};
+        info.bindingCount = 2;
+        info.pBindings = bindings;
+        context.vkCreateDescriptorSetLayout(context.device, &info, nullptr, &layoutPrepare);
+    }
+
+    // pipeline layouts
+    {
+        VkDescriptorSetLayout sets[]{layoutUniforms, layoutTexture, layoutTexture};
+        VkPushConstantRange range{VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, 0, 64};
+        VkPipelineLayoutCreateInfo info{VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO};
+        info.setLayoutCount = 3;
+        info.pSetLayouts = sets;
+        info.pushConstantRangeCount = 1;
+        info.pPushConstantRanges = &range;
+        context.vkCreatePipelineLayout(context.device, &info, nullptr, &pipelineLayout);
+    }
+    {
+        VkPushConstantRange range{VK_SHADER_STAGE_COMPUTE_BIT, 0, 20};
+        VkPipelineLayoutCreateInfo info{VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO};
+        info.setLayoutCount = 1;
+        info.pSetLayouts = &layoutPrepare;
+        info.pushConstantRangeCount = 1;
+        info.pPushConstantRanges = &range;
+        context.vkCreatePipelineLayout(context.device, &info, nullptr, &prepareLayout);
+    }
+
     auto format = VK_FORMAT_R8G8B8A8_UNORM;
     VkAttachmentDescription ms[3]{
         {0, format, VK_SAMPLE_COUNT_4_BIT, VK_ATTACHMENT_LOAD_OP_CLEAR, VK_ATTACHMENT_STORE_OP_DONT_CARE, VK_ATTACHMENT_LOAD_OP_DONT_CARE, VK_ATTACHMENT_STORE_OP_DONT_CARE,
@@ -124,24 +220,25 @@ void VkPipelines::initialize(VkContext& context)
                                    load ? VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL : VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL};
         passSS[load] = _createPass(context, &ss, 1, false, false, _dependencies);
     }
+    return pipelineLayout && prepareLayout && passMS && passSS[0] && passSS[1];
 }
 
 
-void VkPipelines::release(VkContext& context)
+void VkPipelines::destroy(VkContext& context)
 {
-    auto destroy = [&](VkPipeline& pipeline) {
+    auto destroyPipeline = [&](VkPipeline& pipeline) {
         if (pipeline) context.vkDestroyPipeline(context.device, pipeline, nullptr);
         pipeline = VK_NULL_HANDLE;
     };
-    for (auto& p : pipes) destroy(p);
-    for (auto& p : strokeClips) destroy(p);
+    for (auto& p : pipes) destroyPipeline(p);
+    for (auto& p : strokeClips) destroyPipeline(p);
     for (auto& material : blends) {
-        for (auto& p : material) destroy(p);
+        for (auto& p : material) destroyPipeline(p);
     }
-    for (auto& p : composes) destroy(p);
-    for (auto& p : effects) destroy(p);
-    for (auto& p : premultiplies) destroy(p);
-    ARRAY_FOREACH(p, blits) destroy(p->pipeline);
+    for (auto& p : composes) destroyPipeline(p);
+    for (auto& p : effects) destroyPipeline(p);
+    for (auto& p : premultiplies) destroyPipeline(p);
+    ARRAY_FOREACH(p, blits) destroyPipeline(p->pipeline);
     blits.clear();
     ARRAY_FOREACH(p, blitPasses) context.vkDestroyRenderPass(context.device, p->pass, nullptr);
     blitPasses.clear();
@@ -155,6 +252,12 @@ void VkPipelines::release(VkContext& context)
         if (module) context.vkDestroyShaderModule(context.device, module, nullptr);
         module = VK_NULL_HANDLE;
     }
+    if (prepareLayout) context.vkDestroyPipelineLayout(context.device, prepareLayout, nullptr);
+    if (pipelineLayout) context.vkDestroyPipelineLayout(context.device, pipelineLayout, nullptr);
+    if (layoutPrepare) context.vkDestroyDescriptorSetLayout(context.device, layoutPrepare, nullptr);
+    if (layoutTexture) context.vkDestroyDescriptorSetLayout(context.device, layoutTexture, nullptr);
+    if (layoutUniforms) context.vkDestroyDescriptorSetLayout(context.device, layoutUniforms, nullptr);
+    if (cache) context.vkDestroyPipelineCache(context.device, cache, nullptr);
 }
 
 
@@ -277,11 +380,11 @@ VkPipeline VkPipelines::create(VkContext& context, const Desc& desc)
     info.pDepthStencilState = desc.depth == Depth::None ? nullptr : &depthStencil;
     info.pColorBlendState = &blend;
     info.pDynamicState = &dynamic;
-    info.layout = context.pipelineLayout;
+    info.layout = pipelineLayout;
     info.renderPass = desc.pass;
 
     VkPipeline pipeline = VK_NULL_HANDLE;
-    if (context.vkCreateGraphicsPipelines(context.device, context.pipelineCache, 1, &info, nullptr, &pipeline) != VK_SUCCESS) {
+    if (context.vkCreateGraphicsPipelines(context.device, cache, 1, &info, nullptr, &pipeline) != VK_SUCCESS) {
         TVGERR("VK_ENGINE", "Failed to create a graphics pipeline.");
         return VK_NULL_HANDLE;
     }
@@ -324,6 +427,7 @@ VkPipelines::Desc VkPipelines::desc(VkPipe pipe)
 
 VkPipeline VkPipelines::get(VkContext& context, VkPipe pipe)
 {
+    ScopedLock lock(key);
     auto& pipeline = pipes[(int)pipe];
     if (!pipeline) pipeline = create(context, desc(pipe));
     return pipeline;
@@ -332,6 +436,7 @@ VkPipeline VkPipelines::get(VkContext& context, VkPipe pipe)
 
 VkPipeline VkPipelines::clippedStroke(VkContext& context, VkRenderSettingsType type)
 {
+    ScopedLock lock(key);
     auto index = int(type) - 1;
     auto& pipeline = strokeClips[index];
     if (!pipeline) {
@@ -346,6 +451,7 @@ VkPipeline VkPipelines::clippedStroke(VkContext& context, VkRenderSettingsType t
 
 VkPipeline VkPipelines::blend(VkContext& context, VkMaterial material, BlendMethod method)
 {
+    ScopedLock lock(key);
     auto& pipeline = blends[(int)material][(int)method];
     if (pipeline) return pipeline;
 
@@ -372,6 +478,7 @@ VkPipeline VkPipelines::blend(VkContext& context, VkMaterial material, BlendMeth
 
 VkPipeline VkPipelines::compose(VkContext& context, MaskMethod method)
 {
+    ScopedLock lock(key);
     auto& pipeline = composes[(int)method];
     if (!pipeline) {
         auto blend = method <= MaskMethod::InvLuma ? Blend::Normal : Blend::Src;
@@ -383,13 +490,14 @@ VkPipeline VkPipelines::compose(VkContext& context, MaskMethod method)
 
 VkPipeline VkPipelines::effect(VkContext& context, VkEffect effect)
 {
+    ScopedLock lock(key);
     auto& pipeline = effects[(int)effect];
     if (!pipeline) pipeline = create(context, {QuadVert, EffectFrag, Input::Quad, Depth::None, Blend::Src, passSS[1], VK_SAMPLE_COUNT_1_BIT, {int32_t(effect)}, 1});
     return pipeline;
 }
 
 
-VkRenderPass VkPipelines::blitPass(VkContext& context, VkFormat format, bool present)
+VkRenderPass VkPipelines::pass(VkContext& context, VkFormat format, bool present)
 {
     ARRAY_FOREACH(p, blitPasses) {
         if (p->format == format && p->present == present) return p->pass;
@@ -403,19 +511,27 @@ VkRenderPass VkPipelines::blitPass(VkContext& context, VkFormat format, bool pre
         {VK_SUBPASS_EXTERNAL, 0, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT, 0, VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT, 0},
         {0, VK_SUBPASS_EXTERNAL, VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,
          VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT, VK_ACCESS_MEMORY_READ_BIT | VK_ACCESS_MEMORY_WRITE_BIT, 0}};
-    auto pass = _createPass(context, &attachment, 1, false, false, dependencies);
-    if (pass) blitPasses.push({format, present, pass});
-    return pass;
+    auto renderPass = _createPass(context, &attachment, 1, false, false, dependencies);
+    if (renderPass) blitPasses.push({format, present, renderPass});
+    return renderPass;
+}
+
+
+VkRenderPass VkPipelines::blitPass(VkContext& context, VkFormat format, bool present)
+{
+    ScopedLock lock(key);
+    return pass(context, format, present);
 }
 
 
 VkPipeline VkPipelines::blit(VkContext& context, VkFormat format, bool premultiplied)
 {
+    ScopedLock lock(key);
     ARRAY_FOREACH(p, blits) {
         if (p->format == format && p->premultiplied == premultiplied) return p->pipeline;
     }
     // render pass compatibility ignores the final layout, the only difference of the two variants
-    auto pipeline = create(context, {QuadVert, BlitFrag, Input::Quad, Depth::None, Blend::Src, blitPass(context, format, false), VK_SAMPLE_COUNT_1_BIT, {int32_t(!premultiplied)}, 1});
+    auto pipeline = create(context, {QuadVert, BlitFrag, Input::Quad, Depth::None, Blend::Src, pass(context, format, false), VK_SAMPLE_COUNT_1_BIT, {int32_t(!premultiplied)}, 1});
     if (pipeline) blits.push({format, premultiplied, pipeline});
     return pipeline;
 }
@@ -423,6 +539,7 @@ VkPipeline VkPipelines::blit(VkContext& context, VkFormat format, bool premultip
 
 VkPipeline VkPipelines::premultiply(VkContext& context, bool bgr)
 {
+    ScopedLock lock(key);
     auto& pipeline = premultiplies[bgr];
     if (pipeline) return pipeline;
 
@@ -436,7 +553,7 @@ VkPipeline VkPipelines::premultiply(VkContext& context, bool bgr)
     info.stage.module = module(context, PremultiplyComp);
     info.stage.pName = "main";
     info.stage.pSpecializationInfo = &specialization;
-    info.layout = context.prepareLayout;
-    context.vkCreateComputePipelines(context.device, context.pipelineCache, 1, &info, nullptr, &pipeline);
+    info.layout = prepareLayout;
+    context.vkCreateComputePipelines(context.device, cache, 1, &info, nullptr, &pipeline);
     return pipeline;
 }

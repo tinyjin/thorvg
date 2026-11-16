@@ -122,6 +122,7 @@
     X(vkQueuePresentKHR)
 
 struct VkContext;
+struct VkPipelines;
 
 struct VkGpuBuffer
 {
@@ -227,7 +228,6 @@ struct VkContext
     VkPhysicalDeviceMemoryProperties memoryProperties{};
     VkPhysicalDeviceLimits limits{};
     VkFormat depthStencilFormat = VK_FORMAT_UNDEFINED;
-    VkPipelineCache pipelineCache = VK_NULL_HANDLE;
 
     VkSampler samplerNearestClamp = VK_NULL_HANDLE;
     VkSampler samplerNearestRepeat = VK_NULL_HANDLE;
@@ -236,11 +236,7 @@ struct VkContext
     VkSampler samplerLinearMirror = VK_NULL_HANDLE;
     VkSampler samplerImage = VK_NULL_HANDLE;  // mipmapped images
 
-    VkDescriptorSetLayout layoutUniforms = VK_NULL_HANDLE;  // set 0: view and paint dynamic uniform buffers
-    VkDescriptorSetLayout layoutTexture = VK_NULL_HANDLE;   // set 1, 2: a combined image sampler
-    VkDescriptorSetLayout layoutPrepare = VK_NULL_HANDLE;   // compute: storage buffer and storage image
-    VkPipelineLayout pipelineLayout = VK_NULL_HANDLE;
-    VkPipelineLayout prepareLayout = VK_NULL_HANDLE;
+    VkPipelines* pipelines = nullptr;
 
     VkRampAtlas ramps;
 
