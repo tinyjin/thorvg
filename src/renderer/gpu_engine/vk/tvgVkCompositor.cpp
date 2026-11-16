@@ -97,6 +97,7 @@ void VkCompositor::resize(VkContext& context, uint32_t width, uint32_t height)
         }
         depthStencilAttachments.clear();
         for (auto& attachment : transientAttachments) {
+            context.release(attachment.backdrop);
             context.release(attachment.texture);
         }
         transientAttachments.clear();
@@ -258,6 +259,7 @@ void VkCompositor::evict(VkContext& context, const VkRenderTargetPool& targets)
                 ++i;
                 continue;
             }
+            context.release(attachment.backdrop);
             context.release(attachment.texture);
             attachment = attachments->last();
             attachments->pop();
@@ -279,15 +281,27 @@ VkImageView VkCompositor::getDepthStencilView(VkContext& context, uint32_t width
 }
 
 
-VkImageView VkCompositor::getTransientView(VkContext& context, uint32_t width, uint32_t height)
+const VkCompositor::Attachment* VkCompositor::getTransientAttachment(VkContext& context, uint32_t width, uint32_t height)
 {
     for (auto& attachment : transientAttachments) {
-        if (attachment.width == width && attachment.height == height) return attachment.texture.view;
+        if (attachment.width == width && attachment.height == height) return &attachment;
     }
     VkTexture texture;
-    if (!context.createTexture(texture, width, height, VK_FORMAT_R8G8B8A8_UNORM, VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT, VK_SAMPLE_COUNT_4_BIT, true)) return VK_NULL_HANDLE;
-    transientAttachments.push({width, height, texture});
-    return texture.view;
+    if (!context.createTexture(texture, width, height, VK_FORMAT_R8G8B8A8_UNORM, VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_INPUT_ATTACHMENT_BIT, VK_SAMPLE_COUNT_4_BIT, true)) return nullptr;
+    auto backdrop = context.allocate(pipelines->layoutBackdrop);
+    if (!backdrop.set) {
+        context.release(texture);
+        return nullptr;
+    }
+    VkDescriptorImageInfo image{VK_NULL_HANDLE, texture.view, VK_IMAGE_LAYOUT_GENERAL};
+    VkWriteDescriptorSet write{VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET};
+    write.dstSet = backdrop.set;
+    write.descriptorCount = 1;
+    write.descriptorType = VK_DESCRIPTOR_TYPE_INPUT_ATTACHMENT;
+    write.pImageInfo = &image;
+    context.vkUpdateDescriptorSets(context.device, 1, &write, 0, nullptr);
+    transientAttachments.push({width, height, texture, backdrop});
+    return &transientAttachments.last();
 }
 
 
@@ -304,13 +318,12 @@ void VkCompositor::copyTexture(VkContext& context, VkTexture& src, VkTexture& ds
 }
 
 
-bool VkCompositor::copyBackdrop(VkContext& context, BlendMethod method)
+bool VkCompositor::readBackdrop(BlendMethod method)
 {
     if (VkPipelines::hardware(method)) return false;
-    endRenderPass();
-    auto src = currentTargetState->target;
-    copyTexture(context, src->current.texture, targetTemp0.current.texture, src->width, src->height, 0, 0);
-    beginRenderPassMS(context, commandBuffer, *currentTargetState, false);
+    bindTexture(3, backdrop);
+    VkMemoryBarrier barrier{VK_STRUCTURE_TYPE_MEMORY_BARRIER, nullptr, VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT, VK_ACCESS_INPUT_ATTACHMENT_READ_BIT};
+    ctx->vkCmdPipelineBarrier(commandBuffer, VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT, VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT, VK_DEPENDENCY_BY_REGION_BIT, 1, &barrier, 0, nullptr, 0, nullptr);
     return true;
 }
 
@@ -328,11 +341,14 @@ void VkCompositor::beginRenderPassMS(VkContext& context, VkCommandBuffer command
     if (restore) context.transition(commandBuffer, target->previous.texture, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
 
     auto depthStencil = getDepthStencilView(context, target->width, target->height);
+    auto transient = getTransientAttachment(context, target->width, target->height);
+    if (!transient) return;
+    backdrop = transient->backdrop.set;
     VkClearValue clearValues[3]{};
     clearValues[2].depthStencil = {1.0f, 0};
     VkRenderPassBeginInfo info{VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO};
     info.renderPass = pipelines->passMS;
-    info.framebuffer = target->getFramebuffer(context, *pipelines, getTransientView(context, target->width, target->height), depthStencil);
+    info.framebuffer = target->getFramebuffer(context, *pipelines, transient->texture.view, depthStencil);
     info.renderArea = {{0, 0}, {target->width, target->height}};
     info.clearValueCount = 3;
     info.pClearValues = clearValues;
@@ -822,7 +838,7 @@ void VkCompositor::blendShape(VkContext& context, VkShape* rdata, BlendMethod bl
 {
     if (!rdata->shape.setting.valid || rdata->shape.mesh.vbuffer.empty() || rdata->viewport.invalid()) return;
     auto& settings = rdata->shape.setting;
-    auto copied = copyBackdrop(context, blendMethod);
+    auto custom = readBackdrop(blendMethod);
     // render shape with blend settings
     setScissorRegion(rdata->viewport);
     bindView();
@@ -835,16 +851,12 @@ void VkCompositor::blendShape(VkContext& context, VkShape* rdata, BlendMethod bl
     setStencilReference(0);
     if (settings.fillType == VkRenderSettingsType::Solid) {
         // the custom blend shader declares the primary texture for every material
-        if (copied) {
-            bindTexture(1, targetTemp0.current.bgTexture.set);
-            bindTexture(2, targetTemp0.current.bgTexture.set);
-        }
+        if (custom) bindTexture(1, targetTemp0.current.bgTexture.set);
         bind(pipelines->blend(context, VkMaterial::Solid, blendMethod));
         drawMeshSolid(context, &rdata->bboxMesh, rdata->shape.solid.colorIdx);
     } else {
         bindPaint(settings.paintIdx);
         bindTexture(1, settings.ramps(context));
-        if (copied) bindTexture(2, targetTemp0.current.bgTexture.set);
         bind(_gradientBlendPipeline(*pipelines, context, settings.fillType, blendMethod));
         drawMesh(context, &rdata->bboxMesh);
     }
@@ -933,22 +945,18 @@ void VkCompositor::blendStrokes(VkContext& context, VkShape* rdata, BlendMethod 
 {
     if (!rdata->stroke.setting.valid || rdata->stroke.mesh.vbuffer.empty() || rdata->viewport.invalid()) return;
     auto& settings = rdata->stroke.setting;
-    auto copied = copyBackdrop(context, blendMethod);
+    auto custom = readBackdrop(blendMethod);
     setScissorRegion(rdata->viewport);
     stencilStrokes(context, rdata);
     // setup fill rules
     bindStrokeView(rdata->strokeViewMatIdx);
     if (settings.fillType == VkRenderSettingsType::Solid) {
-        if (copied) {
-            bindTexture(1, targetTemp0.current.bgTexture.set);
-            bindTexture(2, targetTemp0.current.bgTexture.set);
-        }
+        if (custom) bindTexture(1, targetTemp0.current.bgTexture.set);
         bind(pipelines->blend(context, VkMaterial::Solid, blendMethod));
         drawMeshSolid(context, &rdata->stroke.bboxMesh, rdata->stroke.solid.colorIdx);
     } else {
         bindPaint(settings.paintIdx);
         bindTexture(1, settings.ramps(context));
-        if (copied) bindTexture(2, targetTemp0.current.bgTexture.set);
         bind(_gradientBlendPipeline(*pipelines, context, settings.fillType, blendMethod));
         drawMesh(context, &rdata->stroke.bboxMesh);
     }
@@ -972,7 +980,7 @@ void VkCompositor::drawImage(VkContext& context, VkPicture* rdata)
 void VkCompositor::blendImage(VkContext& context, VkPicture* rdata, BlendMethod blendMethod)
 {
     if (rdata->viewport.invalid() || !rdata->descriptor) return;
-    auto copied = copyBackdrop(context, blendMethod);
+    readBackdrop(blendMethod);
     setScissorRegion(rdata->viewport);
     bindView();
     // setup stencil rules
@@ -983,7 +991,6 @@ void VkCompositor::blendImage(VkContext& context, VkPicture* rdata, BlendMethod 
     setStencilReference(0);
     bindPaint(rdata->setting.paintIdx);
     bindTexture(1, rdata->descriptor);
-    if (copied) bindTexture(2, targetTemp0.current.bgTexture.set);
     bind(pipelines->blend(context, VkMaterial::Image, blendMethod));
     drawMeshImage(context, &rdata->mesh);
 };
@@ -1026,12 +1033,11 @@ void VkCompositor::drawScene(VkContext& context, VkRenderTarget* scene, VkCompos
 
 void VkCompositor::blendScene(VkContext& context, VkRenderTarget* scene, VkCompose* compose, VkMesh& mesh)
 {
-    auto copied = copyBackdrop(context, compose->blend);
+    readBackdrop(compose->blend);
     // blend scene
     setScissorRegion(compose->aabb);
     setStencilReference(0);
     bindTexture(1, scene->current.bgTexture.set);
-    if (copied) bindTexture(2, targetTemp0.current.bgTexture.set);
     pushValue(compose->opacity / 255.0f);
     bind(pipelines->blend(context, VkMaterial::Scene, compose->blend));
     drawMeshImage(context, &mesh);

@@ -41,20 +41,23 @@ static const VkSubpassDependency _dependencies[]{
      VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT | VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT | VK_PIPELINE_STAGE_TRANSFER_BIT | VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT,
      VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT | VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT,
      VK_ACCESS_COLOR_ATTACHMENT_READ_BIT | VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT | VK_ACCESS_SHADER_READ_BIT | VK_ACCESS_TRANSFER_READ_BIT | VK_ACCESS_TRANSFER_WRITE_BIT | VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_READ_BIT | VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT,
-     0}};
+     0},
+    {0, 0, VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT, VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT, VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT, VK_ACCESS_INPUT_ATTACHMENT_READ_BIT, VK_DEPENDENCY_BY_REGION_BIT}};
 
 
-static VkRenderPass _createPass(VkContext& context, const VkAttachmentDescription* attachments, uint32_t count, bool resolve, bool depth, const VkSubpassDependency* dependencies)
+static VkRenderPass _createPass(VkContext& context, const VkAttachmentDescription* attachments, uint32_t count, bool multisampled, bool depth, const VkSubpassDependency* dependencies)
 {
-    VkAttachmentReference color{0, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL};
+    VkAttachmentReference color{0, multisampled ? VK_IMAGE_LAYOUT_GENERAL : VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL};
     VkAttachmentReference resolved{1, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL};
-    VkAttachmentReference depthStencil{resolve ? 2u : 1u, VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL};
+    VkAttachmentReference depthStencil{multisampled ? 2u : 1u, VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL};
 
     VkSubpassDescription subpass{};
     subpass.pipelineBindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS;
+    subpass.inputAttachmentCount = multisampled ? 1 : 0;
+    subpass.pInputAttachments = &color;
     subpass.colorAttachmentCount = 1;
     subpass.pColorAttachments = &color;
-    subpass.pResolveAttachments = resolve ? &resolved : nullptr;
+    subpass.pResolveAttachments = multisampled ? &resolved : nullptr;
     subpass.pDepthStencilAttachment = depth ? &depthStencil : nullptr;
 
     VkRenderPassCreateInfo info{VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO};
@@ -62,7 +65,7 @@ static VkRenderPass _createPass(VkContext& context, const VkAttachmentDescriptio
     info.pAttachments = attachments;
     info.subpassCount = 1;
     info.pSubpasses = &subpass;
-    info.dependencyCount = 2;
+    info.dependencyCount = multisampled ? 3 : 2;
     info.pDependencies = dependencies;
     VkRenderPass pass = VK_NULL_HANDLE;
     context.vkCreateRenderPass(context.device, &info, nullptr, &pass);
@@ -174,6 +177,13 @@ bool VkPipelines::initialize(VkContext& context)
         context.vkCreateDescriptorSetLayout(context.device, &info, nullptr, &layoutTexture);
     }
     {
+        VkDescriptorSetLayoutBinding binding{0, VK_DESCRIPTOR_TYPE_INPUT_ATTACHMENT, 1, VK_SHADER_STAGE_FRAGMENT_BIT, nullptr};
+        VkDescriptorSetLayoutCreateInfo info{VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO};
+        info.bindingCount = 1;
+        info.pBindings = &binding;
+        context.vkCreateDescriptorSetLayout(context.device, &info, nullptr, &layoutBackdrop);
+    }
+    {
         VkDescriptorSetLayoutBinding bindings[2]{
             {0, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1, VK_SHADER_STAGE_COMPUTE_BIT, nullptr},
             {1, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, 1, VK_SHADER_STAGE_COMPUTE_BIT, nullptr}};
@@ -185,10 +195,10 @@ bool VkPipelines::initialize(VkContext& context)
 
     // pipeline layouts
     {
-        VkDescriptorSetLayout sets[]{layoutUniforms, layoutTexture, layoutTexture};
+        VkDescriptorSetLayout sets[]{layoutUniforms, layoutTexture, layoutTexture, layoutBackdrop};
         VkPushConstantRange range{VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, 0, 64};
         VkPipelineLayoutCreateInfo info{VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO};
-        info.setLayoutCount = 3;
+        info.setLayoutCount = 4;
         info.pSetLayouts = sets;
         info.pushConstantRangeCount = 1;
         info.pPushConstantRanges = &range;
@@ -207,7 +217,7 @@ bool VkPipelines::initialize(VkContext& context)
     auto format = VK_FORMAT_R8G8B8A8_UNORM;
     VkAttachmentDescription ms[3]{
         {0, format, VK_SAMPLE_COUNT_4_BIT, VK_ATTACHMENT_LOAD_OP_CLEAR, VK_ATTACHMENT_STORE_OP_DONT_CARE, VK_ATTACHMENT_LOAD_OP_DONT_CARE, VK_ATTACHMENT_STORE_OP_DONT_CARE,
-         VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL},
+         VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_GENERAL},
         {0, format, VK_SAMPLE_COUNT_1_BIT, VK_ATTACHMENT_LOAD_OP_DONT_CARE, VK_ATTACHMENT_STORE_OP_STORE, VK_ATTACHMENT_LOAD_OP_DONT_CARE, VK_ATTACHMENT_STORE_OP_DONT_CARE,
          VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL},
         {0, context.depthStencilFormat, VK_SAMPLE_COUNT_4_BIT, VK_ATTACHMENT_LOAD_OP_CLEAR, VK_ATTACHMENT_STORE_OP_DONT_CARE, VK_ATTACHMENT_LOAD_OP_CLEAR, VK_ATTACHMENT_STORE_OP_DONT_CARE,
@@ -220,7 +230,7 @@ bool VkPipelines::initialize(VkContext& context)
                                    load ? VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL : VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL};
         passSS[load] = _createPass(context, &ss, 1, false, false, _dependencies);
     }
-    return pipelineLayout && prepareLayout && passMS && passSS[0] && passSS[1];
+    return layoutBackdrop && pipelineLayout && prepareLayout && passMS && passSS[0] && passSS[1];
 }
 
 
@@ -255,6 +265,7 @@ void VkPipelines::destroy(VkContext& context)
     if (prepareLayout) context.vkDestroyPipelineLayout(context.device, prepareLayout, nullptr);
     if (pipelineLayout) context.vkDestroyPipelineLayout(context.device, pipelineLayout, nullptr);
     if (layoutPrepare) context.vkDestroyDescriptorSetLayout(context.device, layoutPrepare, nullptr);
+    if (layoutBackdrop) context.vkDestroyDescriptorSetLayout(context.device, layoutBackdrop, nullptr);
     if (layoutTexture) context.vkDestroyDescriptorSetLayout(context.device, layoutTexture, nullptr);
     if (layoutUniforms) context.vkDestroyDescriptorSetLayout(context.device, layoutUniforms, nullptr);
     if (cache) context.vkDestroyPipelineCache(context.device, cache, nullptr);
