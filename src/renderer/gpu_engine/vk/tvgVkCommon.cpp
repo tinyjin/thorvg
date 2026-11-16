@@ -82,14 +82,12 @@ void VkGarbage::flush(VkContext& context)
     ARRAY_FOREACH(p, buffers) context.vkDestroyBuffer(device, *p, nullptr);
     ARRAY_FOREACH(p, memories) context.vkFreeMemory(device, *p, nullptr);
     ARRAY_FOREACH(p, descriptors) context.vkFreeDescriptorSets(device, p->pool, 1, &p->set);
-    ARRAY_FOREACH(p, swapchains) context.vkDestroySwapchainKHR(device, *p, nullptr);
     framebuffers.clear();
     views.clear();
     images.clear();
     buffers.clear();
     memories.clear();
     descriptors.clear();
-    swapchains.clear();
 }
 
 /************************************************************************/
@@ -778,13 +776,6 @@ void VkContext::release(VkImageView& view)
 {
     if (view) garbage().views.push(view);
     view = VK_NULL_HANDLE;
-}
-
-
-void VkContext::release(VkSwapchainKHR& swapchain)
-{
-    if (swapchain) garbage().swapchains.push(swapchain);
-    swapchain = VK_NULL_HANDLE;
 }
 
 
