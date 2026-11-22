@@ -38,6 +38,12 @@ float radialT(vec2 pos)
     return t;
 }
 
+vec4 radialColor(vec2 pos)
+{
+    if (uPaint.coords.z == 0.0) return texelFetch(uTexture, ivec2(int(GRADIENT_SIZE) - 1, rampRow()), 0);
+    return sampleRamp(1.0 - radialT(pos));
+}
+
 // Returns a premultiplied color.
 vec4 conicColor(vec2 pos)
 {
