@@ -243,6 +243,7 @@ id<MTLLibrary> MtlPipelines::blendLibrary(Material material)
         strcpy(source, tiled ? "#define MTL_TILED\n" : "");
         strcat(source, cMtlShaderSrc_Common);
         strcat(source, sources[material]);
+        if (material == MaterialLinear || material == MaterialRadial || material == MaterialConic) strcat(source, cMtlShaderSrc_Gradient_Blend);
         strcat(source, cMtlShaderSrc_BlendFuncs);
         blendLibraries[material] = createLibrary(source);
     }

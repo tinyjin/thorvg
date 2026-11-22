@@ -29,6 +29,7 @@ extern const char* cMtlShaderSrc_Solid_Blend;
 extern const char* cMtlShaderSrc_Linear_Blend;
 extern const char* cMtlShaderSrc_Radial_Blend;
 extern const char* cMtlShaderSrc_Conic_Blend;
+extern const char* cMtlShaderSrc_Gradient_Blend;
 extern const char* cMtlShaderSrc_Image_Blend;
 extern const char* cMtlShaderSrc_Scene_Blend;
 extern const char* cMtlShaderSrc_BlendFuncs;

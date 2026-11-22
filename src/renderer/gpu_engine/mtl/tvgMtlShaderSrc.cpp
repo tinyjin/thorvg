@@ -85,7 +85,7 @@ static inline float4 conicColor(float2 pos, texture2d<float> tex, sampler smp) {
     return float4(color.rgb * color.a, color.a);
 }
 
-struct FragData { float3 Sc; float Sa; float So; float3 Dc; float Da; };
+struct FragData { float3 Sc; float Sa; float So; float3 Dc; float Da; float4 backdrop; };
 
 #ifdef MTL_TILED
 #define DST_ARG float4 uTextureDst [[color(0)]]
@@ -132,6 +132,11 @@ fragment float4 fs_linear(GradientOutput in [[stage_in]], constant PaintSettings
 }
 
 fragment float4 fs_radial(GradientOutput in [[stage_in]], constant PaintSettings& uPaintSettings [[buffer(0)]], texture2d<float> uTextureGrad [[texture(0)]], sampler uSamplerGrad [[sampler(0)]]) {
+    if (uPaintSettings.gradient.coords.z == 0.0) {
+        float4 color = uTextureGrad.read(uint2(uint(GRADIENT_SIZE) - 1, 0));
+        float alpha = color.a * uPaintSettings.options.a;
+        return float4(color.rgb * alpha, alpha);
+    }
     float t = radialT(in.vGradCoord.xy, uPaintSettings.gradient.coords, uPaintSettings.gradient.focal);
     float4 Sc = uTextureGrad.sample(uSamplerGrad, float2(1.0 - t, 0.5));
     float So = uPaintSettings.options.a;
@@ -319,22 +324,10 @@ typedef GradientOutput VertexOutput;
 #define FS_ARGS constant PaintSettings& uPaintSettings [[buffer(0)]], texture2d<float> uTextureGrad [[texture(0)]], sampler uSamplerGrad [[sampler(0)]], DST_ARG
 #define FS_PASS uPaintSettings, uTextureGrad, uSamplerGrad, uTextureDst
 
-static inline FragData getFragData(VertexOutput v, constant PaintSettings& uPaintSettings, texture2d<float> uTextureGrad, sampler uSamplerGrad, DST_PARAM) {
+static inline float4 getGradientColor(VertexOutput v, constant PaintSettings& uPaintSettings, texture2d<float> uTextureGrad, sampler uSamplerGrad) {
     float t = linearT(v.vGradCoord.xy, uPaintSettings.gradient.coords);
-    float4 colorSrc = uTextureGrad.sample(uSamplerGrad, float2(t, 0.5));
-    float4 colorDst = DST_READ(v);
-    FragData data;
-    data.Sc = colorSrc.rgb;
-    data.Sa = colorSrc.a;
-    data.So = uPaintSettings.options.a;
-    data.Dc = colorDst.rgb;
-    data.Da = colorDst.a;
-    data.Sc = mix(data.Dc, data.Sc, data.Sa * data.So);
-    data.Sa = mix(data.Da, 1.0, data.Sa * data.So);
-    return data;
+    return uTextureGrad.sample(uSamplerGrad, float2(t, 0.5));
 }
-
-static inline float4 postProcess(FragData d, float4 R) { return R; }
 )MSL";
 
 const char* cMtlShaderSrc_Radial_Blend = R"MSL(
@@ -342,22 +335,11 @@ typedef GradientOutput VertexOutput;
 #define FS_ARGS constant PaintSettings& uPaintSettings [[buffer(0)]], texture2d<float> uTextureGrad [[texture(0)]], sampler uSamplerGrad [[sampler(0)]], DST_ARG
 #define FS_PASS uPaintSettings, uTextureGrad, uSamplerGrad, uTextureDst
 
-static inline FragData getFragData(VertexOutput v, constant PaintSettings& uPaintSettings, texture2d<float> uTextureGrad, sampler uSamplerGrad, DST_PARAM) {
+static inline float4 getGradientColor(VertexOutput v, constant PaintSettings& uPaintSettings, texture2d<float> uTextureGrad, sampler uSamplerGrad) {
+    if (uPaintSettings.gradient.coords.z == 0.0) return uTextureGrad.read(uint2(uint(GRADIENT_SIZE) - 1, 0));
     float t = radialT(v.vGradCoord.xy, uPaintSettings.gradient.coords, uPaintSettings.gradient.focal);
-    float4 colorSrc = uTextureGrad.sample(uSamplerGrad, float2(1.0 - t, 0.5));
-    float4 colorDst = DST_READ(v);
-    FragData data;
-    data.Sc = colorSrc.rgb;
-    data.Sa = colorSrc.a;
-    data.So = uPaintSettings.options.a;
-    data.Dc = colorDst.rgb;
-    data.Da = colorDst.a;
-    data.Sc = mix(data.Dc, data.Sc, data.Sa * data.So);
-    data.Sa = mix(data.Da, 1.0, data.Sa * data.So);
-    return data;
+    return uTextureGrad.sample(uSamplerGrad, float2(1.0 - t, 0.5));
 }
-
-static inline float4 postProcess(FragData d, float4 R) { return R; }
 )MSL";
 
 const char* cMtlShaderSrc_Conic_Blend = R"MSL(
@@ -365,21 +347,30 @@ typedef GradientOutput VertexOutput;
 #define FS_ARGS constant PaintSettings& uPaintSettings [[buffer(0)]], texture2d<float> uTextureGrad [[texture(0)]], sampler uSamplerGrad [[sampler(0)]], DST_ARG
 #define FS_PASS uPaintSettings, uTextureGrad, uSamplerGrad, uTextureDst
 
+static inline float4 getGradientColor(VertexOutput v, constant PaintSettings& uPaintSettings, texture2d<float> uTextureGrad, sampler uSamplerGrad) {
+    float4 color = conicColor(v.vGradCoord.xy, uTextureGrad, uSamplerGrad);
+    return float4(color.rgb / (color.a == 0.0 ? 1.0 : color.a), color.a);
+}
+)MSL";
+
+const char* cMtlShaderSrc_Gradient_Blend = R"MSL(
 static inline FragData getFragData(VertexOutput v, constant PaintSettings& uPaintSettings, texture2d<float> uTextureGrad, sampler uSamplerGrad, DST_PARAM) {
-    float4 colorSrc = conicColor(v.vGradCoord.xy, uTextureGrad, uSamplerGrad);
+    float4 colorSrc = getGradientColor(v, uPaintSettings, uTextureGrad, uSamplerGrad);
     float4 colorDst = DST_READ(v);
     FragData data;
     data.Sc = colorSrc.rgb;
-    data.Sa = colorSrc.a;
-    data.So = uPaintSettings.options.a;
-    data.Dc = colorDst.rgb;
-    data.Da = colorDst.a;
-    data.Sc = data.Dc * (1.0 - data.Sa * data.So) + data.Sc * data.So;
-    data.Sa = mix(data.Da, 1.0, data.Sa * data.So);
+    data.Sa = colorSrc.a * uPaintSettings.options.a;
+    data.So = 1.0;
+    data.Dc = colorDst.rgb / (colorDst.a == 0.0 ? 1.0 : colorDst.a);
+    data.Da = 1.0;
+    data.backdrop = colorDst;
     return data;
 }
 
-static inline float4 postProcess(FragData d, float4 R) { return R; }
+static inline float4 postProcess(FragData d, float4 R) {
+    float Da = d.backdrop.a;
+    return float4(mix(d.Sc, R.rgb, Da) * d.Sa + d.backdrop.rgb * (1.0 - d.Sa), d.Sa + Da * (1.0 - d.Sa));
+}
 )MSL";
 
 const char* cMtlShaderSrc_Image_Blend = R"MSL(
@@ -428,7 +419,7 @@ constant float3 LUM_W = float3(0.3, 0.59, 0.11);
 
 float3 setLum(float3 colorIn, float l) {
     float3 color = colorIn + float3(l - dot(colorIn, LUM_W));
-    float ll = dot(color, LUM_W);
+    float ll = l;
     float n = min(color.r, min(color.g, color.b));
     float x = max(color.r, max(color.g, color.b));
     if (n < 0.0) color = float3(ll) + (color - float3(ll)) * (ll / (ll - n));
@@ -441,23 +432,10 @@ float sat(float3 color) {
 }
 
 float3 setSat(float3 colorIn, float s) {
-    float rMin = step(colorIn.r, colorIn.g) * step(colorIn.r, colorIn.b);
-    float gMin = (1.0 - rMin) * step(colorIn.g, colorIn.r) * step(colorIn.g, colorIn.b);
-    float3 minMask = float3(rMin, gMin, 1.0 - rMin - gMin);
-
-    float bMax = step(colorIn.r, colorIn.b) * step(colorIn.g, colorIn.b);
-    float gMax = (1.0 - bMax) * step(colorIn.r, colorIn.g) * step(colorIn.b, colorIn.g);
-    float3 maxMask = float3(1.0 - bMax - gMax, gMax, bMax);
-    float3 midMask = float3(1.0) - minMask - maxMask;
-
-    float cMin = dot(colorIn, minMask);
-    float cMid = dot(colorIn, midMask);
-    float cMax = dot(colorIn, maxMask);
-    float delta = cMax - cMin;
-    float deltaMask = sign(delta);
-    float scale = deltaMask * s / max(delta, 1e-6);
-
-    return maxMask * float3(s * deltaMask) + midMask * float3((cMid - cMin) * scale);
+    float n = min(colorIn.r, min(colorIn.g, colorIn.b));
+    float x = max(colorIn.r, max(colorIn.g, colorIn.b));
+    if (x > n) return (colorIn - float3(n)) * (s / (x - n));
+    return float3(0.0);
 }
 
 #define BLEND(NAME, ...)                                                       \
@@ -504,9 +482,10 @@ BLEND(Lighten, {
 BLEND(ColorDodge, {
     if (d.Da > 0.0) {
         auto Dc = min(One, d.Dc / d.Da);
-        Rc.r = select(0.0, select(1.0, min(1.0, Dc.r / (1.0 - d.Sc.r)), d.Sc.r < 1.0), Dc.r > 0.0);
-        Rc.g = select(0.0, select(1.0, min(1.0, Dc.g / (1.0 - d.Sc.g)), d.Sc.g < 1.0), Dc.g > 0.0);
-        Rc.b = select(0.0, select(1.0, min(1.0, Dc.b / (1.0 - d.Sc.b)), d.Sc.b < 1.0), Dc.b > 0.0);
+        auto denom = select(One, One - d.Sc, d.Sc < One);
+        Rc.r = select(0.0, select(1.0, min(1.0, Dc.r / denom.r), d.Sc.r < 1.0), Dc.r > 0.0);
+        Rc.g = select(0.0, select(1.0, min(1.0, Dc.g / denom.g), d.Sc.g < 1.0), Dc.g > 0.0);
+        Rc.b = select(0.0, select(1.0, min(1.0, Dc.b / denom.b), d.Sc.b < 1.0), Dc.b > 0.0);
         Rc = mix(d.Sc, Rc, d.Da);
     }
 })
@@ -514,9 +493,10 @@ BLEND(ColorDodge, {
 BLEND(ColorBurn, {
     if (d.Da > 0.0) {
         auto Dc = min(One, d.Dc / d.Da);
-        Rc.r = select(select(1.0, 0.0, Dc.r < 1.0), 1.0 - min(1.0, (1.0 - Dc.r) / d.Sc.r), d.Sc.r > 0.0);
-        Rc.g = select(select(1.0, 0.0, Dc.g < 1.0), 1.0 - min(1.0, (1.0 - Dc.g) / d.Sc.g), d.Sc.g > 0.0);
-        Rc.b = select(select(1.0, 0.0, Dc.b < 1.0), 1.0 - min(1.0, (1.0 - Dc.b) / d.Sc.b), d.Sc.b > 0.0);
+        auto denom = select(One, d.Sc, d.Sc > float3(0.0));
+        Rc.r = select(select(1.0, 0.0, Dc.r < 1.0), 1.0 - min(1.0, (1.0 - Dc.r) / denom.r), d.Sc.r > 0.0);
+        Rc.g = select(select(1.0, 0.0, Dc.g < 1.0), 1.0 - min(1.0, (1.0 - Dc.g) / denom.g), d.Sc.g > 0.0);
+        Rc.b = select(select(1.0, 0.0, Dc.b < 1.0), 1.0 - min(1.0, (1.0 - Dc.b) / denom.b), d.Sc.b > 0.0);
         Rc = mix(d.Sc, Rc, d.Da);
     }
 })
