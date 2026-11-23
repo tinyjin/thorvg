@@ -36,6 +36,7 @@
 
 #define VK_INSTANCE_FUNCTIONS(X) \
     X(vkGetDeviceProcAddr) \
+    X(vkEnumerateDeviceExtensionProperties) \
     X(vkGetPhysicalDeviceProperties) \
     X(vkGetPhysicalDeviceMemoryProperties) \
     X(vkGetPhysicalDeviceFormatProperties) \
@@ -105,6 +106,7 @@
     X(vkFreeMemory) \
     X(vkGetBufferMemoryRequirements) \
     X(vkGetImageMemoryRequirements) \
+    X(vkGetRenderAreaGranularity) \
     X(vkMapMemory) \
     X(vkQueueSubmit) \
     X(vkQueueWaitIdle) \
@@ -228,6 +230,7 @@ struct VkContext
     VkPhysicalDeviceMemoryProperties memoryProperties{};
     VkPhysicalDeviceLimits limits{};
     VkFormat depthStencilFormat = VK_FORMAT_UNDEFINED;
+    bool confinedRenderArea{};
 
     VkSampler samplerNearestClamp = VK_NULL_HANDLE;
     VkSampler samplerNearestRepeat = VK_NULL_HANDLE;

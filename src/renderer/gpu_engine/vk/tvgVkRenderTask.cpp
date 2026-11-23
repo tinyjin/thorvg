@@ -22,6 +22,21 @@
 
 #include "tvgVkRenderTask.h"
 
+static RenderRegion _merge(const RenderRegion& lhs, const RenderRegion& rhs)
+{
+    if (lhs.invalid()) return rhs;
+    if (rhs.invalid()) return lhs;
+    return RenderRegion::add(lhs, rhs);
+}
+
+template<typename T>
+static RenderRegion _region(const Array<T*>& paints)
+{
+    RenderRegion region{};
+    for (auto& paint : paints) region = _merge(region, paint->drawRegion());
+    return region;
+}
+
 
 //***********************************************************************
 // VkBatchTask
@@ -46,6 +61,11 @@ void VkBatchTask::run(VkContext& context, VkCompositor& compositor, VkCommandBuf
     else compositor.renderSolidBatch(solidRange);
 }
 
+RenderRegion VkBatchTask::region()
+{
+    return _region(shapes);
+}
+
 //***********************************************************************
 // VkImageBatchTask
 //***********************************************************************
@@ -64,6 +84,11 @@ void VkImageBatchTask::stage(VkCompositor& compositor)
 void VkImageBatchTask::run(VkContext&, VkCompositor& compositor, VkCommandBuffer)
 {
     compositor.renderImageBatch(images[0], range);
+}
+
+RenderRegion VkImageBatchTask::region()
+{
+    return _region(images);
 }
 
 //***********************************************************************
@@ -94,6 +119,18 @@ void VkSceneTask::stage(VkCompositor& compositor)
     for (auto& task : children) {
         task->stage(compositor);
     }
+    uint32_t first = 0;
+    while (first < children.count && !children[first]->scene()) children[first++]->area = targetState.bounds;
+    RenderRegion draws{};
+    for (auto i = children.count; i > first; --i) {
+        auto task = children[i - 1];
+        if (task->scene()) {
+            task->area = ((VkSceneTask*)task)->dstScene == this ? _merge(task->region(), draws) : task->region();
+            draws = {};
+        } else {
+            draws = task->area = _merge(task->region(), draws);
+        }
+    }
 }
 
 // run all, including all shapes drawing, blending, composition and effect
@@ -101,7 +138,7 @@ void VkSceneTask::run(VkContext& context, VkCompositor& compositor, VkCommandBuf
 {
     if (targetState.bounds.invalid()) return;
     // Preserve the canvas contents when clearing is disabled; temporary scenes always clear.
-    compositor.beginRenderPassMS(context, encoder, targetState, clearBuffer);
+    compositor.beginRenderPassMS(context, encoder, targetState, targetState.bounds, clearBuffer);
     runChildren(context, compositor, encoder);  // run all children (scenes and shapes)
     compositor.endRenderPass();
 
@@ -114,12 +151,10 @@ void VkSceneTask::run(VkContext& context, VkCompositor& compositor, VkCommandBuf
 
     // scene blending
     if (compose->method == MaskMethod::None) {
-        compositor.beginRenderPassMS(context, encoder, dstScene->targetState, false);
-        compositor.renderScene(context, targetState.target, compose, composeMesh);
+        if (compositor.beginRenderPassMS(context, encoder, dstScene->targetState, area)) compositor.renderScene(context, targetState.target, compose, composeMesh);
         // scene composition (for scenes, that have a handle to mask)
     } else if (maskScene) {
-        compositor.beginRenderPassMS(context, encoder, dstScene->targetState, false);
-        compositor.composeScene(context, targetState.target, maskScene->targetState.target, compose, composeMesh);
+        if (compositor.beginRenderPassMS(context, encoder, dstScene->targetState, area)) compositor.composeScene(context, targetState.target, maskScene->targetState.target, compose, composeMesh);
     }
 }
 
@@ -129,7 +164,7 @@ void VkSceneTask::runChildren(VkContext& context, VkCompositor& compositor, VkCo
     for (auto& task : children) {
         VkRenderTask* renderTask = task;
         // we need to restore current render pass without clear
-        compositor.beginRenderPassMS(context, encoder, targetState, false);
+        if (!renderTask->scene() && !compositor.beginRenderPassMS(context, encoder, targetState, renderTask->area)) continue;
         // run children (shape or scene)
         renderTask->run(context, compositor, encoder);
     }

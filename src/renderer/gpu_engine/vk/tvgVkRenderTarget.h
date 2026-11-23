@@ -43,7 +43,7 @@ struct VkRenderTarget
     uint32_t used{};   // frame of the last allocation from the pool
 
     bool initialize(VkContext& context, uint32_t width, uint32_t height);
-    bool flip(VkContext& context);
+    bool reserve(VkContext& context);
     VkFramebuffer getFramebuffer(VkContext& context, VkPipelines& pipelines, VkImageView transient, VkImageView depthStencil);
     VkFramebuffer getFramebufferSS(VkContext& context, VkPipelines& pipelines);
     VkDescriptorSet getTextureLinear(VkContext& context);

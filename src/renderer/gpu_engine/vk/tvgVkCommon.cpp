@@ -199,7 +199,7 @@ bool VkContext::load(const VkCanvas::Context& ctx)
     #define VK_LOAD_INSTANCE(name) name = (PFN_##name)getInstanceProcAddr(instance, #name);
     VK_INSTANCE_FUNCTIONS(VK_LOAD_INSTANCE)
     #undef VK_LOAD_INSTANCE
-    if (!vkGetDeviceProcAddr || !vkGetPhysicalDeviceProperties || !vkGetPhysicalDeviceMemoryProperties || !vkGetPhysicalDeviceFormatProperties) return false;
+    if (!vkGetDeviceProcAddr || !vkEnumerateDeviceExtensionProperties || !vkGetPhysicalDeviceProperties || !vkGetPhysicalDeviceMemoryProperties || !vkGetPhysicalDeviceFormatProperties) return false;
 
     #define VK_LOAD_DEVICE(name) name = (PFN_##name)vkGetDeviceProcAddr(device, #name); if (!name) return false;
     VK_DEVICE_FUNCTIONS(VK_LOAD_DEVICE)
@@ -232,6 +232,16 @@ bool VkContext::initialize(const VkCanvas::Context& ctx)
     vkGetPhysicalDeviceProperties(physicalDevice, &properties);
     limits = properties.limits;
     vkGetPhysicalDeviceMemoryProperties(physicalDevice, &memoryProperties);
+
+    uint32_t count = 0;
+    vkEnumerateDeviceExtensionProperties(physicalDevice, nullptr, &count, nullptr);
+    Array<VkExtensionProperties> extensions(count);
+    extensions.count = count;
+    vkEnumerateDeviceExtensionProperties(physicalDevice, nullptr, &count, extensions.data);
+    confinedRenderArea = true;
+    for (uint32_t i = 0; i < count; ++i) {
+        if (!strcmp(extensions[i].extensionName, "VK_KHR_portability_subset")) confinedRenderArea = false;
+    }
 
     // the specification guarantees one of the two packed depth stencil formats
     for (auto format : {VK_FORMAT_D24_UNORM_S8_UINT, VK_FORMAT_D32_SFLOAT_S8_UINT}) {

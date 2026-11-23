@@ -28,9 +28,13 @@
 // base class for any renderable objects
 struct VkRenderTask
 {
+    RenderRegion area{};
+
     virtual ~VkRenderTask() {}
     virtual void stage(VkCompositor& compositor) = 0;
     virtual void run(VkContext& context, VkCompositor& compositor, VkCommandBuffer encoder) = 0;
+    virtual RenderRegion region() = 0;
+    virtual bool scene() { return false; }
 };
 
 // task for single shape rendering
@@ -46,6 +50,7 @@ struct VkPaintTask : VkRenderTask
     void stage(VkCompositor& compositor) override;
     // apply shape execution, including custom blending and clipping
     void run(VkContext& context, VkCompositor& compositor, VkCommandBuffer encoder) override;
+    RenderRegion region() override { return renderPaint->drawRegion(); }
 };
 
 struct VkBatchTask : VkRenderTask
@@ -58,6 +63,7 @@ struct VkBatchTask : VkRenderTask
     VkBatchTask(VkShape* first, VkShape* second, bool stencilBatch);
     void stage(VkCompositor& compositor) override;
     void run(VkContext& context, VkCompositor& compositor, VkCommandBuffer encoder) override;
+    RenderRegion region() override;
 };
 
 struct VkImageBatchTask : VkRenderTask
@@ -68,6 +74,7 @@ struct VkImageBatchTask : VkRenderTask
     VkImageBatchTask(VkPicture* first, VkPicture* second);
     void stage(VkCompositor& compositor) override;
     void run(VkContext& context, VkCompositor& compositor, VkCommandBuffer encoder) override;
+    RenderRegion region() override;
 };
 
 // task for scene rendering with blending, composition and effect
@@ -88,6 +95,8 @@ struct VkSceneTask : VkRenderTask
         parent(parent), targetState{renderTarget, compose->aabb}, compose(compose) {}
     void stage(VkCompositor& compositor) override;
     void run(VkContext& context, VkCompositor& compositor, VkCommandBuffer encoder) override;
+    RenderRegion region() override { return compose->aabb; }
+    bool scene() override { return true; }
     void runChildren(VkContext& context, VkCompositor& compositor, VkCommandBuffer encoder);
     void runEffect(VkContext& context, VkCompositor& compositor, const RenderEffect* effect);
 };

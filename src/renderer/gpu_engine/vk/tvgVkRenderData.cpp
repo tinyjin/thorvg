@@ -86,6 +86,24 @@ void VkPaint::assign(const Array<RenderData>& clips)
     this->clips = *((Array<VkPaint*>*)&clips);
 }
 
+RenderRegion VkPaint::drawRegion()
+{
+    BBox bbox;
+    if (type() == Type::Shape) bbox = static_cast<VkShape*>(this)->bbox;
+    else {
+        bbox.init();
+        for (auto& p : static_cast<VkPicture*>(this)->mesh.vbuffer) {
+            bbox.min = tvg::min(bbox.min, p);
+            bbox.max = tvg::max(bbox.max, p);
+        }
+    }
+    // one pixel of margin keeps the antialiased edge samples
+    RenderRegion region{int32_t(floorf(bbox.min.x)) - 1, int32_t(floorf(bbox.min.y)) - 1, int32_t(ceilf(bbox.max.x)) + 1, int32_t(ceilf(bbox.max.y)) + 1};
+    region.intersect(viewport);
+    if (region.invalid()) return {};
+    return region;
+}
+
 //***********************************************************************
 // VkShape
 //***********************************************************************

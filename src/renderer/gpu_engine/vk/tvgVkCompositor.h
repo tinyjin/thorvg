@@ -72,6 +72,7 @@ private:
     VkCommandBuffer commandBuffer{};
     bool renderPass{};
     const VkRenderTargetState* currentTargetState{};
+    RenderRegion renderArea{};
     RenderRegion clipRegion{};  // where the active clip paths are resolved
     // bound state
     VkPipeline currentPipeline{};
@@ -96,7 +97,7 @@ private:
     VkImageView getDepthStencilView(VkContext& context, uint32_t width, uint32_t height);
     const Attachment* getTransientAttachment(VkContext& context, uint32_t width, uint32_t height);
     void requestQuad(VkMesh& mesh, const VkRenderTargetState& src, const VkRenderTargetState& dst, const VkRenderTargetState* mask = nullptr);
-    void copyTexture(VkContext& context, VkTexture& src, VkTexture& dst, uint32_t width, uint32_t height, int32_t x, int32_t y);
+    void copyTexture(VkContext& context, VkTexture& src, VkTexture& dst, const RenderRegion& region, int32_t x, int32_t y);
     void copyEffectTexture(VkContext& context, VkRenderTarget* dst, const VkRenderTargetState& src, bool clear = false);
     bool readBackdrop(BlendMethod method);
 
@@ -149,7 +150,7 @@ public:
     void evict(VkContext& context, const VkRenderTargetPool& targets);
 
     // render passes workflow
-    void beginRenderPassMS(VkContext& context, VkCommandBuffer commandBuffer, const VkRenderTargetState& targetState, bool clearBuffer);
+    bool beginRenderPassMS(VkContext& context, VkCommandBuffer commandBuffer, const VkRenderTargetState& targetState, const RenderRegion& region, bool clearBuffer = false);
     void beginRenderPass(VkContext& context, VkCommandBuffer commandBuffer, VkRenderTarget* target, bool clearBuffer = false);
     void endRenderPass();
 

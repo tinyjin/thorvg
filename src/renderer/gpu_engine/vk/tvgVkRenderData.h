@@ -73,6 +73,7 @@ struct VkPaint
     virtual RenderRegion region() = 0;
     virtual Type type() { return Type::Undefined; };
     void assign(const Array<RenderData>& clips);
+    RenderRegion drawRegion();
 };
 
 struct VkShape : VkPaint

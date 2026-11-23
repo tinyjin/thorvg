@@ -133,9 +133,8 @@ void VkCompositor::setScissor(int32_t x, int32_t y, uint32_t w, uint32_t h)
 void VkCompositor::setScissorRegion(const RenderRegion& region)
 {
     const auto& bounds = currentTargetState->bounds;
-    const RenderRegion rect{
-        tvg::clamp(region.xMin, bounds.xMin, bounds.xMax) - bounds.xMin, tvg::clamp(region.yMin, bounds.yMin, bounds.yMax) - bounds.yMin,
-        tvg::clamp(region.xMax, bounds.xMin, bounds.xMax) - bounds.xMin, tvg::clamp(region.yMax, bounds.yMin, bounds.yMax) - bounds.yMin};
+    auto rect = RenderRegion::intersect({region.xMin - bounds.xMin, region.yMin - bounds.yMin, region.xMax - bounds.xMin, region.yMax - bounds.yMin}, {0, 0, bounds.sw(), bounds.sh()});
+    rect.intersect(renderArea);
     setScissor(rect.x(), rect.y(), rect.w(), rect.h());
 }
 
@@ -305,15 +304,16 @@ const VkCompositor::Attachment* VkCompositor::getTransientAttachment(VkContext& 
 }
 
 
-void VkCompositor::copyTexture(VkContext& context, VkTexture& src, VkTexture& dst, uint32_t width, uint32_t height, int32_t x, int32_t y)
+void VkCompositor::copyTexture(VkContext& context, VkTexture& src, VkTexture& dst, const RenderRegion& region, int32_t x, int32_t y)
 {
     context.transition(commandBuffer, src, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, dst, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
-    VkImageCopy region{};
-    region.srcSubresource = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, 1};
-    region.dstSubresource = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, 1};
-    region.dstOffset = {x, y, 0};
-    region.extent = {width, height, 1};
-    context.vkCmdCopyImage(commandBuffer, src.image, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, dst.image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &region);
+    VkImageCopy copy{};
+    copy.srcSubresource = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, 1};
+    copy.dstSubresource = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, 1};
+    copy.srcOffset = {region.sx(), region.sy(), 0};
+    copy.dstOffset = {x, y, 0};
+    copy.extent = {region.w(), region.h(), 1};
+    context.vkCmdCopyImage(commandBuffer, src.image, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, dst.image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &copy);
     context.transition(commandBuffer, src, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, dst, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
 }
 
@@ -328,45 +328,65 @@ bool VkCompositor::readBackdrop(BlendMethod method)
 }
 
 
-void VkCompositor::beginRenderPassMS(VkContext& context, VkCommandBuffer commandBuffer, const VkRenderTargetState& targetState, bool clearBuffer)
+static RenderRegion _align(const RenderRegion& region, const VkExtent2D& granularity, const RenderRegion& limit)
+{
+    if (region.invalid()) return region;
+    auto w = std::max(int32_t(granularity.width), 1);
+    auto h = std::max(int32_t(granularity.height), 1);
+    return RenderRegion::intersect({region.xMin / w * w, region.yMin / h * h, (region.xMax + w - 1) / w * w, (region.yMax + h - 1) / h * h}, limit);
+}
+
+
+bool VkCompositor::beginRenderPassMS(VkContext& context, VkCommandBuffer commandBuffer, const VkRenderTargetState& targetState, const RenderRegion& region, bool clearBuffer)
 {
     auto target = targetState.target;
-    if (renderPass && currentTargetState == &targetState && !clearBuffer) return;
+    const auto& bounds = targetState.bounds;
+    const RenderRegion full{0, 0, int32_t(target->width), int32_t(target->height)};
+    auto area = (clearBuffer || !context.confinedRenderArea) ? full : _align(RenderRegion::intersect({region.xMin - bounds.xMin, region.yMin - bounds.yMin, region.xMax - bounds.xMin, region.yMax - bounds.yMin}, {0, 0, bounds.sw(), bounds.sh()}), pipelines->granularity, full);
+    if (renderPass && currentTargetState == &targetState && !clearBuffer && renderArea.contained(area)) return true;
+    if (area.invalid()) return false;
     // we must to end render pass first
     endRenderPass();
     currentTargetState = &targetState;
     this->commandBuffer = commandBuffer;
 
-    auto restore = !clearBuffer && target->flip(context);
-    if (restore) context.transition(commandBuffer, target->previous.texture, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
+    auto restore = !clearBuffer && target->reserve(context);
+    if (restore) {
+        if (area == full) std::swap(target->current, target->previous);
+        else copyTexture(context, target->current.texture, target->previous.texture, area, area.sx(), area.sy());
+        context.transition(commandBuffer, target->previous.texture, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
+    }
+    context.transition(commandBuffer, target->current.texture, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
 
     auto depthStencil = getDepthStencilView(context, target->width, target->height);
     auto transient = getTransientAttachment(context, target->width, target->height);
-    if (!transient) return;
+    if (!transient) return false;
     backdrop = transient->backdrop.set;
     VkClearValue clearValues[3]{};
     clearValues[2].depthStencil = {1.0f, 0};
     VkRenderPassBeginInfo info{VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO};
     info.renderPass = pipelines->passMS;
     info.framebuffer = target->getFramebuffer(context, *pipelines, transient->texture.view, depthStencil);
-    info.renderArea = {{0, 0}, {target->width, target->height}};
+    info.renderArea = {{area.sx(), area.sy()}, {area.w(), area.h()}};
     info.clearValueCount = 3;
     info.pClearValues = clearValues;
-    if (!info.framebuffer) return;
+    if (!info.framebuffer) return false;
     context.vkCmdBeginRenderPass(commandBuffer, &info, VK_SUBPASS_CONTENTS_INLINE);
     renderPass = true;
+    renderArea = area;
     target->current.texture.layout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;  // the final layout of the resolve
 
     resetBindings();
     setViewport(target->width, target->height);
     if (restore) {
-        setScissor(0, 0, target->width, target->height);
+        setScissor(area.sx(), area.sy(), area.w(), area.h());
         setStencilReference(0);
         bindTexture(1, target->previous.bgTexture.set);
         bind(pipelines->get(context, VkPipe::Restore));
         drawMeshImage(context, &meshDataBlit);
     }
     bindVertex(0, targetState.transformOffset);
+    return true;
 }
 
 
@@ -512,7 +532,7 @@ void VkCompositor::copyEffectTexture(VkContext& context, VkRenderTarget* dst, co
         VkImageSubresourceRange range{VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1};
         context.vkCmdClearColorImage(commandBuffer, dst->current.texture.image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, &color, 1, &range);
     }
-    copyTexture(context, src.target->current.texture, dst->current.texture, src.bounds.w(), src.bounds.h(), src.bounds.x(), src.bounds.y());
+    copyTexture(context, src.target->current.texture, dst->current.texture, {0, 0, src.bounds.sw(), src.bounds.sh()}, src.bounds.sx(), src.bounds.sy());
 }
 
 
@@ -1062,29 +1082,10 @@ void VkCompositor::markupClipPath(VkContext& context, VkShape* rdata)
 }
 
 
-// The clip only has to be resolved where the paint draws, the clip paths themselves may span the whole scene.
-static RenderRegion _drawRegion(VkPaint* paint)
-{
-    BBox bbox;
-    if (paint->type() == Type::Shape) bbox = static_cast<VkShape*>(paint)->bbox;
-    else {
-        bbox.init();
-        for (auto& p : static_cast<VkPicture*>(paint)->mesh.vbuffer) {
-            bbox.min = tvg::min(bbox.min, p);
-            bbox.max = tvg::max(bbox.max, p);
-        }
-    }
-    // one pixel of margin keeps the antialiased edge samples
-    RenderRegion region{int32_t(floorf(bbox.min.x)) - 1, int32_t(floorf(bbox.min.y)) - 1, int32_t(ceilf(bbox.max.x)) + 1, int32_t(ceilf(bbox.max.y)) + 1};
-    region.intersect(paint->viewport);
-    if (region.invalid()) return {};
-    return region;
-}
-
-
 void VkCompositor::renderClipPath(VkContext& context, VkPaint* paint)
 {
-    clipRegion = _drawRegion(paint);
+    // The clip only has to be resolved where the paint draws, the clip paths themselves may span the whole scene.
+    clipRegion = paint->drawRegion();
     auto rdata0 = (VkShape*)paint->clips[0];
     // markup stencil
     markupClipPath(context, rdata0);

@@ -63,6 +63,7 @@ struct VkPipelines
     VkPipelineLayout pipelineLayout{};
     VkPipelineLayout prepareLayout{};
     VkRenderPass passMS{};
+    VkExtent2D granularity{1, 1};
     VkRenderPass passSS[2]{};  // index 0: clear, 1: load
 
     static VkPipelines* acquire(VkContext& context);

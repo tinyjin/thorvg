@@ -64,11 +64,9 @@ bool VkRenderTarget::initialize(VkContext& context, uint32_t width, uint32_t hei
     return true;
 }
 
-bool VkRenderTarget::flip(VkContext& context)
+bool VkRenderTarget::reserve(VkContext& context)
 {
-    if (!previous.texture.valid() && !_createResolve(context, previous, width, height)) return false;
-    std::swap(current, previous);
-    return true;
+    return previous.texture.valid() || _createResolve(context, previous, width, height);
 }
 
 VkFramebuffer VkRenderTarget::getFramebuffer(VkContext& context, VkPipelines& pipelines, VkImageView transient, VkImageView depthStencil)
