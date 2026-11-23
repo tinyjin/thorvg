@@ -217,21 +217,17 @@ fragment float4 fs_shadow(ImageOutput in [[stage_in]], constant float4* settings
     return orig + shad * (1.0 - orig.a);
 }
 
-static inline float gaussian(float x, float sigma) {
-    float exponent = -x * x / (2.0 * sigma * sigma);
-    return exp(exponent) * 0.39894 / sigma;
-}
-
 static inline float4 gaussianBlur(float2 coord, float2 axis, constant float4* settings, texture2d<float> tex, sampler smp) {
     float2 texelSize = 1.0 / float2(tex.get_width(), tex.get_height());
     float4 colorSum = float4(0.0);
     float sigma = settings[0].x * settings[0].y;
+    float scale = -0.5 / (sigma * sigma);
     float weightSum = 0.0;
     int radius = int(settings[0].z);
     for (int i = -radius; i <= radius; i++) {
         float2 sampled = coord + axis * float(i) * texelSize;
         float along = dot(sampled, axis);
-        float weight = saturate(along) == along ? gaussian(float(i), sigma) : 0.0;
+        float weight = saturate(along) == along ? exp(float(i * i) * scale) : 0.0;
         colorSum += tex.sample(smp, sampled, level(0.0)) * weight;
         weightSum += weight;
     }
