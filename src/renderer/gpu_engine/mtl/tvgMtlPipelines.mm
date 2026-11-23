@@ -224,10 +224,10 @@ static id<MTLRenderPipelineState> _createPipeline(id<MTLDevice> device, MTLRende
     return state;
 }
 
-id<MTLLibrary> MtlPipelines::createLibrary(const char* source)
+id<MTLLibrary> MtlPipelines::createLibrary(const char* source, bool fastMath)
 {
     auto options = [[MTLCompileOptions alloc] init];
-    options.fastMathEnabled = NO;  // Shaders rely on IEEE infinities, for example at the radial gradient focal point.
+    options.fastMathEnabled = fastMath;
     NSError* error = nil;
     auto library = [device newLibraryWithSource:[NSString stringWithUTF8String:source] options:options error:&error];
     if (!library) TVGERR("MTL_ENGINE", "Failed to compile shaders: %s", error.localizedDescription.UTF8String);
@@ -245,7 +245,7 @@ id<MTLLibrary> MtlPipelines::blendLibrary(Material material)
         strcat(source, sources[material]);
         if (material == MaterialLinear || material == MaterialRadial || material == MaterialConic) strcat(source, cMtlShaderSrc_Gradient_Blend);
         strcat(source, cMtlShaderSrc_BlendFuncs);
-        blendLibraries[material] = createLibrary(source);
+        blendLibraries[material] = createLibrary(source, false);
     }
     return blendLibraries[material];
 }
@@ -406,7 +406,7 @@ void MtlPipelines::initialize(MtlContext& context)
 {
     device = [context.device retain];
     tiled = context.tiled;
-    library = createLibrary(cMtlShaderSrc_Main);
+    library = createLibrary(cMtlShaderSrc_Main, true);
 }
 
 static void _release(MtlPipeline& pipeline)

@@ -77,7 +77,7 @@ private:
     void initialize(MtlContext& context);
     void destroy();
     id<MTLFunction> function(const char* name);
-    id<MTLLibrary> createLibrary(const char* source);
+    id<MTLLibrary> createLibrary(const char* source, bool fastMath);
     id<MTLLibrary> blendLibrary(Material material);
     const MtlPipeline& blendPipeline(Material material, BlendMethod method);
 
