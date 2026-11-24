@@ -185,9 +185,14 @@ bool VkShaderTypeGradientData::update(const Fill* fill)
         range_s = uint32_t(sstops[di - 1].offset * (VK_TEXTURE_GRADIENT_SIZE - 1));
         range_e = uint32_t(sstops[di - 0].offset * (VK_TEXTURE_GRADIENT_SIZE - 1));
         float delta = 1.0f/(range_e - range_s);
+        const auto& from = sstops[di - 1];
+        const auto& to = sstops[di];
+        const float start[4] = {float(from.r), float(from.g), float(from.b), float(from.a)};
+        const float diff[4] = {float(to.r - from.r), float(to.g - from.g), float(to.b - from.b), float(to.a - from.a)};
         dst = data + range_s * 4;
         for (uint32_t ti = range_s; (ti < range_e) && (ti < VK_TEXTURE_GRADIENT_SIZE); ti++, dst += 4) {
-            assign(dst, tvg::lerp(sstops[di - 1], sstops[di], (ti - range_s) * delta));
+            auto t = (ti - range_s) * delta;
+            for (int c = 0; c < 4; ++c) dst[c] = uint8_t(tvg::clamp(int(start[c] + diff[c] * t), 0, 255));
         }
     }
 
