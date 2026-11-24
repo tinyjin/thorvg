@@ -171,7 +171,17 @@ void VkRampAtlas::flush(VkContext& context)
         VkBufferImageCopy regions[64];
         auto buffer = uploads[i].buffer;
         uint32_t count = 0;
-        while (i < uploads.count && uploads[i].buffer == buffer && count < 64) regions[count++] = uploads[i++].region;
+        while (i < uploads.count && uploads[i].buffer == buffer && count < 64) {
+            const auto& region = uploads[i++].region;
+            if (count) {
+                auto& last = regions[count - 1];
+                if (last.imageOffset.y + int32_t(last.imageExtent.height) == region.imageOffset.y && last.bufferOffset + VkDeviceSize(last.imageExtent.height) * WIDTH * 4 == region.bufferOffset) {
+                    ++last.imageExtent.height;
+                    continue;
+                }
+            }
+            regions[count++] = region;
+        }
         context.vkCmdCopyBufferToImage(cmd, buffer, texture.image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, count, regions);
     }
     context.transition(cmd, texture, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
