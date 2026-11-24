@@ -170,6 +170,12 @@ struct VkGarbage
     void flush(VkContext& context);
 };
 
+struct VkUpload
+{
+    VkGpuBuffer buffer;
+    uint32_t idle = 0;
+};
+
 struct VkFrame
 {
     VkCommandPool pool = VK_NULL_HANDLE;
@@ -181,6 +187,7 @@ struct VkFrame
     VkGpuBuffer staging;
     VkDeviceSize stagingUsed = 0;
     uint32_t stagingIdle = 0;  // consecutive frames that used a small part of the staging buffer
+    Array<VkUpload> uploads;
     VkGarbage garbage;
     bool submitted = false;
 };

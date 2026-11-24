@@ -25,6 +25,7 @@
 
 #define VK_STAGING_RING_MIN (1u << 20)
 #define VK_STAGING_SHRINK_FRAMES 120  // a staging buffer mostly unused for this many frames is released
+#define VK_UPLOAD_IDLE_FRAMES 4
 #define VK_DESCRIPTOR_POOL_SETS 256
 
 static VkDeviceSize _align(VkDeviceSize value, VkDeviceSize alignment)
@@ -303,6 +304,7 @@ void VkContext::release()
 
     for (auto& frame : frames) {
         destroy(frame.staging);
+        for (auto& upload : frame.uploads) destroy(upload.buffer);
         frame.garbage.flush(*this);
         if (frame.transient) vkDestroyDescriptorPool(device, frame.transient, nullptr);
         if (frame.acquired) vkDestroySemaphore(device, frame.acquired, nullptr);
@@ -344,6 +346,13 @@ void VkContext::open()
         }
     } else f.stagingIdle = 0;
     f.stagingUsed = 0;
+    for (uint32_t i = 0; i < f.uploads.count;) {
+        if (++f.uploads[i].idle > VK_UPLOAD_IDLE_FRAMES) {
+            destroy(f.uploads[i].buffer);
+            f.uploads[i] = f.uploads.last();
+            f.uploads.pop();
+        } else ++i;
+    }
     f.recording = 0;
 
     VkCommandBufferBeginInfo beginInfo{VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO};
@@ -439,6 +448,27 @@ VkBuffer VkContext::stage(const void* data, VkDeviceSize size, VkDeviceSize& off
     open();
     auto& f = frames[current];
     auto usage = VK_BUFFER_USAGE_TRANSFER_SRC_BIT | VK_BUFFER_USAGE_STORAGE_BUFFER_BIT;
+
+    if (size > VK_STAGING_RING_MIN) {
+        VkUpload* upload = nullptr;
+        for (auto& candidate : f.uploads) {
+            if (candidate.idle && candidate.buffer.size >= size && candidate.buffer.size < size * 2) {
+                upload = &candidate;
+                break;
+            }
+        }
+        if (!upload) {
+            VkGpuBuffer buffer;
+            if (!createBuffer(buffer, size, usage, true)) return VK_NULL_HANDLE;
+            f.uploads.push({buffer, 0});
+            upload = &f.uploads.last();
+        }
+        upload->idle = 0;
+        memcpy(upload->buffer.mapped, data, size);
+        flush(upload->buffer, size);
+        offset = 0;
+        return upload->buffer.buffer;
+    }
 
     // 16 bytes satisfy the texel size and the copy offset rules of every format in use
     offset = _align(f.stagingUsed, 16);
